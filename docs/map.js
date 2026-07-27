@@ -22,10 +22,11 @@ window.Mipas = window.Mipas || {};
   function initMap(container) {
     const map = L.map(container, { zoomControl: false, attributionControl: true });
     map.setView([-23.561, -46.656], 12);
-    // Tiles do CartoDB Voyager (gratuitos, sem chave de API): tom baixo/acinzentado
-    // (nem escuro nem branco-estourado) com boas linhas de contraste nas vias,
-    // ao contrário do "dark_all" anterior (monocromático demais).
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // Tiles claros do CartoDB Positron (gratuitos, sem chave de API, ótimo
+    // contraste nas vias) invertidos via CSS (.leaflet-tile-pane no styles.css)
+    // pra virar um azul-marinho escuro, parecido com o Google Maps dark mode,
+    // sem depender de nenhum provedor de tiles escuros/pago.
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '© OpenStreetMap contributors © CARTO',
       subdomains: 'abcd',
       maxZoom: 20,
