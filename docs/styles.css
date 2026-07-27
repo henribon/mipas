@@ -1,0 +1,51 @@
+html, body { margin: 0; height: 100%; }
+
+body {
+  background: #121214;
+  font-family: 'Inter', system-ui, sans-serif;
+  overscroll-behavior: none;
+}
+
+#root { height: 100%; }
+
+a { color: #FF5C38; }
+a:hover { color: #E04424; }
+
+::-webkit-scrollbar { width: 0; height: 0; }
+
+.leaflet-container {
+  font-family: 'Inter', sans-serif;
+  height: 100%;
+  width: 100%;
+  background: #121214;
+}
+.leaflet-control-attribution {
+  background: rgba(18,18,20,.7) !important;
+  color: #8B8B93 !important;
+}
+.leaflet-control-attribution a { color: #C7C7CC !important; }
+
+input, textarea { font-family: 'Inter', sans-serif; }
+input:focus, textarea:focus { outline: none; border-color: #FF5C38 !important; }
+
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pinDrop {
+  0% { transform: translateY(-14px) scale(.6); opacity: 0; }
+  60% { transform: translateY(2px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+.pin-anim { animation: pinDrop .4s ease-out; }
+
+/* Desktop: os "bottom sheets" viram modais centralizados em vez de ocupar a
+   largura toda da tela (que só faz sentido em telas estreitas de celular). */
+@media (min-width: 720px) {
+  .mipas-sheet {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 40px !important;
+    transform: translateX(-50%);
+    width: 420px;
+    border-radius: 20px !important;
+  }
+}

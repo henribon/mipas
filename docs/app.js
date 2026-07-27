@@ -1,0 +1,350 @@
+window.Mipas = window.Mipas || {};
+
+function App() {
+  const { useState, useEffect, useRef, useMemo } = React;
+  const C = window.Mipas.theme;
+  const data = window.Mipas.data;
+
+  // ?list=<uuid> na URL => modo compartilhamento: sempre somente-leitura, mesmo
+  // que o dono esteja logado no mesmo navegador, e restrito a essa lista só.
+  const sharedListId = useMemo(() => new URLSearchParams(window.location.search).get('list'), []);
+  const sharedMode = !!sharedListId;
+
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+
+  const [lists, setLists] = useState([]);
+  const [places, setPlaces] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  const [tab, setTab] = useState('map');
+  const [openListId, setOpenListId] = useState(sharedMode ? sharedListId : null);
+  const [selId, setSelId] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [newListOpen, setNewListOpen] = useState(false);
+  const [creatingList, setCreatingList] = useState(false);
+  const [pendingListPick, setPendingListPick] = useState(false);
+
+  const mapRef = useRef(null);
+  const leafRef = useRef(null);
+  const markersRef = useRef({});
+
+  const canEdit = !sharedMode && !!session;
+
+  useEffect(() => {
+    window.Mipas.auth.getSession().then(s => { setSession(s); setAuthReady(true); });
+    const sub = window.Mipas.auth.onChange(s => setSession(s));
+    return () => sub.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    setLoadingData(true);
+    const loadPromise = sharedMode
+      ? Promise.all([
+          data.fetchListById(sharedListId).then(l => (l ? [l] : [])),
+          data.fetchPlacesByListId(sharedListId),
+        ])
+      : Promise.all([data.fetchLists(), data.fetchPlaces()]);
+
+    loadPromise
+      .then(([ls, ps]) => {
+        setLists(ls);
+        setPlaces(ps);
+        setLoadError(sharedMode && ls.length === 0 ? 'Essa lista não está disponível.' : '');
+      })
+      .catch(() => setLoadError('Não deu pra carregar os dados. Confira o config.js e as políticas do Supabase.'))
+      .finally(() => setLoadingData(false));
+  }, [authReady, session]);
+
+  useEffect(() => {
+    const m = window.Mipas.map.initMap(mapRef.current);
+    leafRef.current = m;
+    setTimeout(() => m.invalidateSize(), 300);
+    return () => m.remove();
+  }, []);
+
+  useEffect(() => {
+    const m = leafRef.current;
+    if (!m) return;
+    window.Mipas.map.syncMarkers(m, markersRef, places, lists, (p) => {
+      setSelId(p.id);
+      setTab('map');
+      setOpenListId(null);
+      m.flyTo([p.latitude, p.longitude], Math.max(m.getZoom(), 14), { duration: .6 });
+    });
+  }, [places, lists]);
+
+  useEffect(() => {
+    if (!sharedMode || places.length === 0) return;
+    const m = leafRef.current;
+    if (!m) return;
+    const first = places[0];
+    setTimeout(() => m.flyTo([first.latitude, first.longitude], 13, { duration: .6 }), 200);
+  }, [sharedMode, places]);
+
+  const debouncedSearch = useMemo(() => window.Mipas.debounce(async (q) => {
+    if (!q.trim()) { setResults([]); return; }
+    setSearching(true);
+    try {
+      setResults(await window.Mipas.geocodeAddress(q));
+    } catch (e) {
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, 600), []);
+
+  useEffect(() => { debouncedSearch(query); }, [query]);
+
+  const goToPlace = (p) => {
+    setTab('map');
+    setOpenListId(null);
+    setSelId(p.id);
+    setTimeout(() => {
+      leafRef.current.invalidateSize();
+      leafRef.current.flyTo([p.latitude, p.longitude], 15, { duration: .8 });
+    }, 60);
+  };
+
+  const savePlace = async (d) => {
+    setSaving(true);
+    try {
+      const created = await data.createPlace({
+        name: d.name.trim(),
+        address: d.address,
+        latitude: d.lat,
+        longitude: d.lng,
+        note: d.note || null,
+        list_id: d.list_id,
+      });
+      setPlaces(ps => [...ps, created]);
+      setDraft(null);
+      setSearchOpen(false);
+      setQuery('');
+      setResults([]);
+      setTimeout(() => {
+        leafRef.current.flyTo([created.latitude, created.longitude], 15, { duration: .9 });
+        setSelId(created.id);
+      }, 100);
+    } catch (e) {
+      alert('Não deu pra guardar esse lugar. Você está logado?');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addList = async (l) => {
+    setCreatingList(true);
+    try {
+      const created = await data.createList(l);
+      setLists(ls => [...ls, created]);
+      setNewListOpen(false);
+      if (pendingListPick && draft) {
+        setDraft(d => ({ ...d, list_id: created.id }));
+        setPendingListPick(false);
+      }
+    } catch (e) {
+      alert('Não deu pra criar a lista.');
+    } finally {
+      setCreatingList(false);
+    }
+  };
+
+  const removePlace = async (id) => {
+    if (!confirm('Excluir esse lugar?')) return;
+    try {
+      await data.deletePlace(id);
+      setPlaces(ps => ps.filter(p => p.id !== id));
+      setSelId(null);
+    } catch (e) {
+      alert('Não deu pra excluir.');
+    }
+  };
+
+  const shareList = async (list) => {
+    try {
+      let target = list;
+      if (!list.is_public) {
+        target = await data.updateList(list.id, { is_public: true });
+        setLists(ls => ls.map(l => (l.id === target.id ? target : l)));
+      }
+      const url = `${window.location.origin}${window.location.pathname}?list=${target.id}`;
+      await navigator.clipboard.writeText(url);
+      alert('Link copiado:\n' + url);
+    } catch (e) {
+      alert('Não deu pra gerar o link.');
+    }
+  };
+
+  const handleAuthButtonClick = () => {
+    if (canEdit) window.Mipas.auth.signOut();
+    else setLoginOpen(true);
+  };
+
+  const sel = places.find(p => p.id === selId);
+  const openList = lists.find(l => l.id === openListId);
+
+  const showLoading = loadingData && lists.length === 0 && places.length === 0;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: C.paper, overflow: 'hidden' }}>
+      <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 110, background: 'linear-gradient(rgba(18,18,20,.9),rgba(18,18,20,0))', pointerEvents: 'none', zIndex: 400 }} />
+
+      {showLoading && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1000, background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter', fontWeight: 600, color: C.sub }}>
+          Carregando…
+        </div>
+      )}
+
+      {loadError && (
+        <div style={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 999, background: 'rgba(255,80,60,.15)', border: '1px solid rgba(255,80,60,.35)', color: '#FF6B5B', borderRadius: 12, padding: '10px 14px', fontWeight: 600, fontSize: 13 }}>{loadError}</div>
+      )}
+
+      {!sharedMode && (
+        <button onClick={handleAuthButtonClick} style={{
+          position: 'absolute', top: 16, right: 16, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
+          padding: '8px 14px', background: C.surface,
+          fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: canEdit ? C.coral : C.sub, cursor: 'pointer',
+        }}>
+          {canEdit ? 'Sair' : 'Entrar'}
+        </button>
+      )}
+
+      {tab === 'map' && !searchOpen && canEdit && (
+        <div onClick={() => setSearchOpen(true)} style={{
+          position: 'absolute', top: 66, left: 16, right: 90, zIndex: 500, cursor: 'pointer',
+          background: C.surface, borderRadius: 999, padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 10,
+          border: `1.5px solid ${C.line}`,
+        }}>
+          <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="7.5" cy="7.5" r="5.5" fill="none" stroke={C.coral} strokeWidth="2.2" /><line x1="12" y1="12" x2="16" y2="16" stroke={C.coral} strokeWidth="2.2" strokeLinecap="round" /></svg>
+          <span style={{ color: C.sub, fontSize: 15, fontWeight: 600 }}>Buscar um endereço pra guardar…</span>
+        </div>
+      )}
+
+      {searchOpen && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 800, background: C.paper, display: 'flex', flexDirection: 'column', animation: 'fadeIn .15s' }}>
+          <div style={{ padding: '66px 16px 10px', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div style={{ flex: 1, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 999, padding: '12px 18px', display: 'flex', gap: 10, alignItems: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="7.5" cy="7.5" r="5.5" fill="none" stroke={C.coral} strokeWidth="2.2" /><line x1="12" y1="12" x2="16" y2="16" stroke={C.coral} strokeWidth="2.2" strokeLinecap="round" /></svg>
+              <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Rua, praça, avenida…" style={{ border: 'none', background: 'none', fontSize: 15, fontWeight: 600, color: C.ink, width: '100%' }} />
+            </div>
+            <button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '4px 16px 20px' }}>
+            {!query.trim() && (
+              <div style={{ textAlign: 'center', marginTop: 90, color: C.sub }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: C.ink, marginTop: 10 }}>Ache um lugar novo</div>
+                <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 6, lineHeight: 1.5 }}>Busque qualquer endereço,<br />dê um nome só seu e guarde numa lista.</div>
+              </div>
+            )}
+            {searching && <div style={{ textAlign: 'center', marginTop: 40, color: C.sub, fontWeight: 600 }}>Buscando…</div>}
+            {query.trim() && !searching && results.length === 0 && (
+              <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
+            )}
+            {results.map((r, i) => (
+              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', note: '', list_id: lists[0]?.id })}
+                style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.35 }}>{r.address}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === 'lists' && !openList && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink }}>Minhas listas</div>
+          <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {lists.map(l => {
+              const count = places.filter(p => p.list_id === l.id).length;
+              return (
+                <div key={l.id} onClick={() => setOpenListId(l.id)} style={{
+                  display: 'flex', alignItems: 'center', gap: 14, background: C.surface, borderRadius: 16,
+                  padding: '16px 16px', border: `1.5px solid ${C.line}`, cursor: 'pointer',
+                }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
+                    <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
+                  </div>
+                  <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
+                </div>
+              );
+            })}
+            {canEdit && (
+              <button onClick={() => setNewListOpen(true)} style={{
+                border: `2px dashed ${C.coral}66`, background: 'none', borderRadius: 16, padding: '18px',
+                fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.coral, cursor: 'pointer',
+              }}>+ Nova lista</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {openList && (
+        <ListDetail
+          list={openList}
+          places={places.filter(p => p.list_id === openList.id)}
+          onBack={() => setOpenListId(null)}
+          onOpen={goToPlace}
+          onRemove={removePlace}
+          onShare={() => shareList(openList)}
+          canEdit={canEdit}
+        />
+      )}
+
+      {!searchOpen && !draft && (
+        <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', zIndex: 700, display: 'flex', gap: 4, background: 'rgba(27,27,31,.9)', backdropFilter: 'blur(14px)', borderRadius: 999, padding: 5, border: `1.5px solid ${C.line}` }}>
+          {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => (
+            <button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} style={{
+              border: 'none', cursor: 'pointer', borderRadius: 999, padding: '10px 26px',
+              fontFamily: 'Inter', fontWeight: 700, fontSize: 14,
+              background: tab === k ? C.coral : 'transparent', color: tab === k ? '#fff' : C.sub,
+            }}>{lb}</button>
+          ))}
+        </div>
+      )}
+
+      {sel && tab === 'map' && !draft && (
+        <PlaceCard place={sel} list={lists.find(l => l.id === sel.list_id)} onClose={() => setSelId(null)} />
+      )}
+
+      {draft && (
+        <SaveSheet
+          draft={draft}
+          setDraft={setDraft}
+          lists={lists}
+          saving={saving}
+          onNewList={() => { setPendingListPick(true); setNewListOpen(true); }}
+          onCancel={() => setDraft(null)}
+          onSave={() => savePlace(draft)}
+        />
+      )}
+
+      {newListOpen && (
+        <NewListSheet
+          creating={creatingList}
+          onCancel={() => { setNewListOpen(false); setPendingListPick(false); }}
+          onCreate={addList}
+        />
+      )}
+
+      {loginOpen && <LoginForm onCancel={() => setLoginOpen(false)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
