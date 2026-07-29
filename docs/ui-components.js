@@ -246,13 +246,14 @@ function InstagramButton({ handle }) {
 }
 
 function PlaceCard({ place, list, onClose }) {
+  const { useState } = React;
   const C = window.Mipas.theme;
+  const [openId, setOpenId] = useState(null);
+  const photos = place.photos || [];
   return (
     <div style={{ position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 750, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, boxShadow: '0 14px 40px rgba(0,0,0,.5)', overflow: 'hidden', animation: 'sheetUp .28s cubic-bezier(.2,.9,.3,1)' }}>
-      <div style={place.photos?.[0]
-        ? { height: 72, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, backgroundImage: `url(${place.photos[0].url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
-        : { height: 72, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: gradientForPlace(place, list) }}>
-        {!place.photos?.[0] && (list?.emoji || '📍')}
+      <div style={{ height: 72, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: gradientForPlace(place, list) }}>
+        {list?.emoji || '📍'}
         <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.4)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.ink }}>✕</button>
       </div>
       <div style={{ padding: '14px 18px 16px' }}>
@@ -268,10 +269,25 @@ function PlaceCard({ place, list, onClose }) {
             </div>
           )}
           {place.instagram && <InstagramButton handle={place.instagram} />}
+          {photos.length > 0 && (
+            <button onClick={() => setOpenId(photos[0].id)} title="Ver as fotos" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${C.line}`,
+              background: C.cream, color: C.ink, borderRadius: 999, padding: '5px 12px',
+              fontFamily: 'Inter', fontSize: 12, fontWeight: 800, letterSpacing: .4, cursor: 'pointer',
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.9l1.2-2h6.8l1.2 2h1.9A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-9Z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+                <circle cx="12" cy="13" r="3.6" stroke="currentColor" strokeWidth="1.9" />
+              </svg>
+              FOTOS{photos.length > 1 ? ` (${photos.length})` : ''}
+            </button>
+          )}
         </div>
         {place.description && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.description}</div>}
         {place.note && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.note}</div>}
       </div>
+
+      {openId && <PhotoLightbox photos={photos} openId={openId} onSetId={setOpenId} onClose={() => setOpenId(null)} />}
     </div>
   );
 }
@@ -348,14 +364,17 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
   );
 }
 
-// Fotos agrupadas por título: fotos com o mesmo título (ex: "Macarronada")
-// formam um grupo com várias fotos; a descrição é do grupo (gravada em todas
-// as fotos dele). Fotos sem título ficam soltas no fim, como thumbs simples.
-function PhotoStrip({ photos, canEdit, onAdd, onRemove, onUpdate }) {
-  const { useRef } = React;
+// Galeria do lugar: não há foto de capa. Dentro do bloco as fotos aparecem
+// como miniaturas enfileiradas, pra não inchar o card; clicar abre a foto
+// grande no visualizador. Fotos com o mesmo título (ex: "Macarronada") formam
+// um grupo com legenda própria; a descrição é do grupo (gravada em todas as
+// fotos dele). Fotos sem título ficam soltas no fim.
+function PhotoGallery({ photos, canEdit, onAdd, onRemove, onUpdate }) {
+  const { useRef, useState } = React;
   const C = window.Mipas.theme;
   const inputRef = useRef(null);
   const pendingTitleRef = useRef(null);
+  const [openId, setOpenId] = useState(null);
   if (!canEdit && (!photos || photos.length === 0)) return null;
 
   const handleFile = (e) => {
@@ -371,35 +390,45 @@ function PhotoStrip({ photos, canEdit, onAdd, onRemove, onUpdate }) {
   all.forEach(ph => { const t = (ph.title || '').trim(); if (t && !titles.includes(t)) titles.push(t); });
   const groups = titles.map(t => ({ title: t, items: all.filter(ph => (ph.title || '').trim() === t) }));
   const untitled = all.filter(ph => !(ph.title || '').trim());
+  // Ordem que o visualizador percorre com as setas — a mesma que está na tela.
+  const ordered = [...groups.flatMap(g => g.items), ...untitled];
 
+  // Miniatura: mantém o bloco do lugar compacto. A foto grande só aparece no
+  // visualizador, ao clicar.
   const thumb = (ph) => (
-    <div key={ph.id} style={{ position: 'relative', flexShrink: 0, width: 64, height: 64, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.line}` }}>
-      <img src={ph.url} alt={ph.title || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+    <div key={ph.id} style={{ position: 'relative', flexShrink: 0 }}>
+      <img src={ph.url} alt={ph.title || ''} loading="lazy" onClick={() => setOpenId(ph.id)}
+        title="Ver foto"
+        style={{ width: 72, height: 72, objectFit: 'cover', display: 'block', borderRadius: 10, border: `1px solid ${C.line}`, background: C.cream, cursor: 'zoom-in' }} />
       {canEdit && (
-        <button onClick={() => onRemove(ph)} style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '18px', padding: 0 }}>✕</button>
+        <button onClick={() => onRemove(ph)} style={{ position: 'absolute', top: 3, right: 3, width: 19, height: 19, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '19px', padding: 0 }}>✕</button>
       )}
     </div>
   );
 
   const addBtn = (title) => (
-    <button onClick={() => pickFile(title)} style={{ flexShrink: 0, width: 64, height: 64, borderRadius: 10, border: `1.5px dashed ${C.coral}66`, background: 'none', color: C.coral, fontSize: 22, fontWeight: 700, cursor: 'pointer' }}>+</button>
+    <button onClick={() => pickFile(title)} title="Adicionar foto" style={{
+      flexShrink: 0, width: 72, height: 72, borderRadius: 10,
+      border: `1.5px dashed ${C.coral}66`, background: 'none', color: C.coral,
+      fontSize: 22, fontWeight: 700, cursor: 'pointer',
+    }}>+</button>
   );
 
   return (
-    <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
       {groups.map(g => {
         const desc = (g.items.find(i => i.description && i.description.trim()) || {}).description || '';
         return (
-          <div key={g.title} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 8 }}>
+          <div key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {canEdit ? (
-              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <InlineEdit value={g.title} placeholder="Título" width={110} onCommit={v => g.items.forEach(ph => onUpdate(ph, { title: v }))} />
-                <InlineEdit value={desc} placeholder="Descrição" width="100%" onCommit={v => g.items.forEach(ph => onUpdate(ph, { description: v }))} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <InlineEdit value={g.title} placeholder="Título" width="100%" onCommit={v => g.items.forEach(ph => onUpdate(ph, { title: v }))} />
+                <InlineEdit value={desc} placeholder="Descrição dessas fotos" width="100%" onCommit={v => g.items.forEach(ph => onUpdate(ph, { description: v }))} />
               </div>
             ) : (
-              <div style={{ marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>{g.title}</span>
-                {desc && <span style={{ fontSize: 11.5, fontWeight: 500, color: C.sub }}> — {desc}</span>}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{g.title}</div>
+                {desc && <div style={{ fontSize: 12, fontWeight: 500, color: C.sub, marginTop: 1, lineHeight: 1.4 }}>{desc}</div>}
               </div>
             )}
             <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
@@ -411,24 +440,92 @@ function PhotoStrip({ photos, canEdit, onAdd, onRemove, onUpdate }) {
       })}
 
       {(untitled.length > 0 || canEdit) && (
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', alignItems: 'flex-start' }}>
-          {untitled.map(ph => canEdit ? (
-            <div key={ph.id} style={{ flexShrink: 0, width: 128, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.line}`, background: C.surface }}>
-              <div style={{ position: 'relative', height: 64 }}>
-                <img src={ph.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                <button onClick={() => onRemove(ph)} style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '18px', padding: 0 }}>✕</button>
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', alignItems: 'flex-start' }}>
+          {untitled.map(ph => (
+            canEdit ? (
+              <div key={ph.id} style={{ flexShrink: 0, width: 110, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {thumb(ph)}
+                <InlineEdit value={ph.title} placeholder="Título" width="100%" onCommit={v => onUpdate(ph, { title: v })} />
               </div>
-              <div style={{ padding: 6 }}>
-                <InlineEdit value={ph.title} placeholder="Título (agrupa)" width="100%" onCommit={v => onUpdate(ph, { title: v })} />
-              </div>
-            </div>
-          ) : thumb(ph))}
+            ) : thumb(ph)
+          ))}
           {canEdit && addBtn(null)}
         </div>
       )}
 
       {canEdit && <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />}
+
+      {openId && <PhotoLightbox photos={ordered} openId={openId} onSetId={setOpenId} onClose={() => setOpenId(null)} />}
     </div>
+  );
+}
+
+// Visualizador em tela cheia: abre ao clicar numa miniatura. Setas (teclado ou
+// botões) andam entre as fotos do lugar; Esc, clique no fundo ou no ✕ fecham.
+function PhotoLightbox({ photos, openId, onSetId, onClose }) {
+  const { useEffect } = React;
+  const C = window.Mipas.theme;
+  const idx = Math.max(0, photos.findIndex(p => p.id === openId));
+  const ph = photos[idx];
+  const go = (delta) => {
+    const next = photos[(idx + delta + photos.length) % photos.length];
+    if (next) onSetId(next.id);
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') go(1);
+      if (e.key === 'ArrowLeft') go(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [idx, photos.length]);
+
+  if (!ph) return null;
+
+  const arrow = (dir, glyph) => (
+    <button onClick={ev => { ev.stopPropagation(); go(dir); }} style={{
+      position: 'absolute', top: '50%', transform: 'translateY(-50%)', [dir < 0 ? 'left' : 'right']: 14,
+      width: 40, height: 40, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.55)',
+      color: '#fff', fontSize: 20, fontWeight: 700, cursor: 'pointer', lineHeight: '40px', padding: 0,
+    }}>{glyph}</button>
+  );
+
+  // Portal pro body: dentro do card o "position: fixed" ficaria preso ao
+  // elemento animado (transform cria bloco de contenção) e a foto abriria
+  // recortada dentro do cartão em vez de ocupar a tela.
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,.9)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      padding: 24, boxSizing: 'border-box', animation: 'fadeIn .15s',
+    }}>
+      <img src={ph.url} alt={ph.title || ''} onClick={ev => ev.stopPropagation()}
+        style={{ maxWidth: '100%', maxHeight: 'calc(100% - 90px)', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
+
+      {(ph.title || ph.description) && (
+        <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 14, maxWidth: 620, textAlign: 'center' }}>
+          {ph.title && <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 800, color: '#fff' }}>{ph.title}</div>}
+          {ph.description && <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,.72)', marginTop: 3, lineHeight: 1.45 }}>{ph.description}</div>}
+        </div>
+      )}
+
+      {photos.length > 1 && (
+        <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.55)' }}>
+          {idx + 1} / {photos.length}
+        </div>
+      )}
+
+      <button onClick={onClose} style={{
+        position: 'absolute', top: 16, right: 16, width: 36, height: 36, borderRadius: 99, border: 'none',
+        background: 'rgba(255,255,255,.15)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: 0,
+      }}>✕</button>
+
+      {photos.length > 1 && arrow(-1, '‹')}
+      {photos.length > 1 && arrow(1, '›')}
+    </div>,
+    document.body
   );
 }
 
@@ -557,9 +654,7 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
         {sortedPlaces.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
         {sortedPlaces.map(p => (
           <div key={p.id} onClick={() => onOpen(p)} style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden', cursor: 'pointer' }}>
-            <div style={p.photos?.[0]
-              ? { height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundImage: `linear-gradient(rgba(0,0,0,.38),rgba(0,0,0,.38)), url(${p.photos[0].url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
-              : { height: 64, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ height: 64, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 16, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 14px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
                 {p.name}
               </div>
@@ -621,7 +716,7 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '4px 10px' }}>#{p.rank}</div>
                 )}
               </div>
-              <PhotoStrip photos={p.photos} canEdit={canEdit} onAdd={(file, title) => onAddPhoto(p.id, file, title)} onRemove={photo => onRemovePhoto(p.id, photo)} onUpdate={(photo, patch) => onUpdatePhoto(p.id, photo.id, patch)} />
+              <PhotoGallery photos={p.photos} canEdit={canEdit} onAdd={(file, title) => onAddPhoto(p.id, file, title)} onRemove={photo => onRemovePhoto(p.id, photo)} onUpdate={(photo, patch) => onUpdatePhoto(p.id, photo.id, patch)} />
             </div>
           </div>
         ))}

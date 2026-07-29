@@ -93,9 +93,19 @@ window.Mipas = window.Mipas || {};
   async function signedUrlMap(paths) {
     if (paths.length === 0) return {};
     const { data, error } = await client.storage.from('place-photos').createSignedUrls(paths, SIGNED_URL_TTL);
-    if (error) return {};
+    if (error) {
+      // Sem isto a imagem some da tela sem nenhum aviso — o <img> fica com
+      // src vazio e não há erro visível em lugar nenhum.
+      console.error('[Mipas] não deu pra assinar URLs de foto:', error);
+      return {};
+    }
     const map = {};
-    data.forEach(d => { if (d.signedUrl) map[d.path] = d.signedUrl; });
+    // Versões do supabase-js divergem entre "signedUrl" e "signedURL" nesta
+    // resposta; aceitar os dois evita quebrar quando o CDN sobe de versão.
+    data.forEach(d => {
+      const url = d.signedUrl || d.signedURL;
+      if (url) map[d.path] = url;
+    });
     return map;
   }
 
