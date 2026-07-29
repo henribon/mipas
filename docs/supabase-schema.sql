@@ -58,6 +58,8 @@ create table public.place_photos (
   place_id      uuid not null references public.places(id) on delete cascade,
   owner_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
   storage_path  text not null,
+  title         text,
+  description   text,
   created_at    timestamptz not null default now()
 );
 
@@ -149,6 +151,9 @@ create policy "owner can insert own photos" on public.place_photos
     and exists (select 1 from public.places p where p.id = place_photos.place_id and p.owner_id = auth.uid())
   );
 
+create policy "owner can update own photos" on public.place_photos
+  for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+
 create policy "owner can delete own photos" on public.place_photos
   for delete to authenticated using (auth.uid() = owner_id);
 
@@ -239,6 +244,9 @@ create table if not exists public.place_photos (
 
 create index if not exists idx_place_photos_place_id on public.place_photos(place_id);
 
+alter table public.place_photos add column if not exists title text;
+alter table public.place_photos add column if not exists description text;
+
 alter table public.place_photos enable row level security;
 
 drop policy if exists "public can read photos of public lists" on public.place_photos;
@@ -260,6 +268,10 @@ create policy "owner can insert own photos" on public.place_photos
     auth.uid() = owner_id
     and exists (select 1 from public.places p where p.id = place_photos.place_id and p.owner_id = auth.uid())
   );
+
+drop policy if exists "owner can update own photos" on public.place_photos;
+create policy "owner can update own photos" on public.place_photos
+  for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
 
 drop policy if exists "owner can delete own photos" on public.place_photos;
 create policy "owner can delete own photos" on public.place_photos

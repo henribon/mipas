@@ -75,14 +75,20 @@ window.Mipas = window.Mipas || {};
     return client.storage.from('place-photos').getPublicUrl(path).data.publicUrl;
   }
 
-  async function uploadPhoto(ownerId, placeId, file) {
+  async function uploadPhoto(ownerId, placeId, file, title) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${ownerId}/${placeId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error: uploadError } = await client.storage.from('place-photos').upload(path, file);
     if (uploadError) throw uploadError;
     const { data, error } = await client.from('place_photos')
-      .insert({ place_id: placeId, storage_path: path })
+      .insert({ place_id: placeId, storage_path: path, title: title || null })
       .select().single();
+    if (error) throw error;
+    return { ...data, url: photoUrl(data.storage_path) };
+  }
+
+  async function updatePhoto(id, patch) {
+    const { data, error } = await client.from('place_photos').update(patch).eq('id', id).select().single();
     if (error) throw error;
     return { ...data, url: photoUrl(data.storage_path) };
   }
@@ -117,6 +123,6 @@ window.Mipas = window.Mipas || {};
     createList, updateList, deleteList,
     createPlace, updatePlace, deletePlace,
     fetchHome, saveHome, clearHome,
-    uploadPhoto, deletePhoto,
+    uploadPhoto, updatePhoto, deletePhoto,
   };
 })();

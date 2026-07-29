@@ -262,6 +262,26 @@ function App() {
     }
   };
 
+  // Preenche o rank da lista inteira a partir da nota (maior nota = rank 1).
+  // Lugares sem nota perdem o rank (ficam fora do ranking até ganharem nota).
+  const autoRankByRating = async (list) => {
+    const listPlaces = places.filter(p => p.list_id === list.id);
+    const rated = listPlaces
+      .filter(p => p.rating != null)
+      .sort((a, b) => (b.rating - a.rating) || a.created_at.localeCompare(b.created_at));
+    const updates = [
+      ...rated.map((p, i) => ({ id: p.id, rank: i + 1 })),
+      ...listPlaces.filter(p => p.rating == null && p.rank != null).map(p => ({ id: p.id, rank: null })),
+    ].filter(u => { const cur = listPlaces.find(p => p.id === u.id); return cur.rank !== u.rank; });
+    if (updates.length === 0) return;
+    try {
+      const results = await Promise.all(updates.map(u => data.updatePlace(u.id, { rank: u.rank })));
+      setPlaces(ps => ps.map(p => results.find(r => r.id === p.id) || p));
+    } catch (e) {
+      alert('Não deu pra rankear por nota.');
+    }
+  };
+
   const updateInstagram = async (placeId, instagram) => {
     try {
       const updated = await data.updatePlace(placeId, { instagram: instagram ? instagram.replace(/^@/, '') : null });
@@ -280,12 +300,23 @@ function App() {
     }
   };
 
-  const addPhoto = async (placeId, file) => {
+  const addPhoto = async (placeId, file, title) => {
     try {
-      const photo = await data.uploadPhoto(session.user.id, placeId, file);
+      const photo = await data.uploadPhoto(session.user.id, placeId, file, title);
       setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: [...(p.photos || []), photo] } : p)));
     } catch (e) {
       alert('Não deu pra enviar a foto.');
+    }
+  };
+
+  const updatePhotoMeta = async (placeId, photoId, patch) => {
+    try {
+      const updated = await data.updatePhoto(photoId, patch);
+      setPlaces(ps => ps.map(p => (p.id === placeId
+        ? { ...p, photos: (p.photos || []).map(ph => (ph.id === photoId ? updated : ph)) }
+        : p)));
+    } catch (e) {
+      alert('Não deu pra salvar os dados da foto.');
     }
   };
 
@@ -459,7 +490,9 @@ function App() {
           onUpdateInstagram={updateInstagram}
           onAddPhoto={addPhoto}
           onRemovePhoto={removePhoto}
+          onUpdatePhoto={updatePhotoMeta}
           onToggleRanking={() => toggleRanking(openList)}
+          onAutoRank={() => autoRankByRating(openList)}
           canEdit={canEdit}
           variant="overlay"
         />
@@ -502,7 +535,9 @@ function App() {
           onUpdateInstagram={updateInstagram}
             onAddPhoto={addPhoto}
             onRemovePhoto={removePhoto}
+          onUpdatePhoto={updatePhotoMeta}
             onToggleRanking={() => toggleRanking(openList)}
+          onAutoRank={() => autoRankByRating(openList)}
             canEdit={canEdit}
             variant="panel"
           />

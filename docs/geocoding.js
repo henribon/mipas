@@ -31,7 +31,21 @@ window.Mipas = window.Mipas || {};
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  // Nominatim devolve "1533, Rua Bela Cintra, Cerqueira César, Jardim Paulista,
+  // São Paulo, Região Sudeste, 01415-007, Brasil" — pra exibição queremos só
+  // "Rua Bela Cintra, 1533 – Cerqueira César". O endereço completo continua
+  // guardado no banco; isso aqui é só formatação de tela.
+  function shortAddress(full) {
+    const parts = String(full).split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) return full;
+    if (/^\d+[a-zA-Z]?$/.test(parts[0])) {
+      return parts[1] + ', ' + parts[0] + (parts[2] ? ' – ' + parts[2] : '');
+    }
+    return parts[0] + ' – ' + parts[1];
+  }
+
   window.Mipas.geocodeAddress = geocodeAddress;
   window.Mipas.debounce = debounce;
   window.Mipas.haversineKm = haversineKm;
+  window.Mipas.shortAddress = shortAddress;
 })();
