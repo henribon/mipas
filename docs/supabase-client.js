@@ -52,9 +52,9 @@ window.Mipas = window.Mipas || {};
     if (error) throw error;
   }
 
-  async function createPlace({ name, address, latitude, longitude, note, category, rating, description, avg_price, list_id }) {
+  async function createPlace({ name, address, latitude, longitude, note, category, rating, description, avg_price, instagram, list_id }) {
     const { data, error } = await client.from('places')
-      .insert({ name, address, latitude, longitude, note, category, rating, description, avg_price, list_id })
+      .insert({ name, address, latitude, longitude, note, category, rating, description, avg_price, instagram, list_id })
       .select().single();
     if (error) throw error;
     return withPhotoUrls(data);

@@ -37,6 +37,7 @@ create table public.places (
   rating       numeric(3,1),
   description  text,
   avg_price    numeric(10,2),
+  instagram    text,
   created_at   timestamptz not null default now()
 );
 
@@ -201,6 +202,7 @@ alter table public.places add column if not exists category text;
 alter table public.places add column if not exists rating numeric(3,1);
 alter table public.places add column if not exists description text;
 alter table public.places add column if not exists avg_price numeric(10,2);
+alter table public.places add column if not exists instagram text;
 
 create table if not exists public.user_home (
   owner_id    uuid primary key references auth.users(id) on delete cascade,

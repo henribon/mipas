@@ -61,6 +61,9 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
               style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
           </div>
         </div>
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Instagram <span style={{ color: C.sub, fontWeight: 500 }}>(opcional)</span></div>
+        <input value={draft.instagram || ''} onChange={e => set('instagram', e.target.value)} placeholder="@dolugar"
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Descrição <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, visível pra quem ver a lista)</span></div>
         <textarea value={draft.description || ''} onChange={e => set('description', e.target.value)} placeholder="Como é o lugar, o que pedir, vibe geral…" rows={2}
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
@@ -205,6 +208,25 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
   );
 }
 
+// Botão "INSTAGRAM" com o logo — aceita "@handle", "handle" ou URL completa.
+function InstagramButton({ handle }) {
+  const url = /^https?:\/\//i.test(handle) ? handle : 'https://instagram.com/' + handle.replace(/^@/, '');
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none',
+      background: 'linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)', color: '#fff',
+      borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 800, letterSpacing: .4,
+    }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="2" width="20" height="20" rx="5.5" stroke="currentColor" strokeWidth="2.4" />
+        <circle cx="12" cy="12" r="4.6" stroke="currentColor" strokeWidth="2.4" />
+        <circle cx="17.4" cy="6.6" r="1.5" fill="currentColor" />
+      </svg>
+      INSTAGRAM
+    </a>
+  );
+}
+
 function PlaceCard({ place, list, onClose }) {
   const C = window.Mipas.theme;
   return (
@@ -227,6 +249,7 @@ function PlaceCard({ place, list, onClose }) {
               R$ {Number(place.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           )}
+          {place.instagram && <InstagramButton handle={place.instagram} />}
         </div>
         {place.description && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.description}</div>}
         {place.note && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.note}</div>}
@@ -353,7 +376,7 @@ const NUMERIC_SORT_ACCESSORS = {
   valor: p => p.avg_price,
 };
 
-function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onUpdateRank, onUpdateCategory, onUpdateRating, onUpdateDescription, onUpdateAvgPrice, onAddPhoto, onRemovePhoto, onToggleRanking, canEdit, variant }) {
+function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onUpdateRank, onUpdateCategory, onUpdateRating, onUpdateDescription, onUpdateAvgPrice, onUpdateInstagram, onAddPhoto, onRemovePhoto, onToggleRanking, canEdit, variant }) {
   const { useState, useMemo, useEffect } = React;
   const C = window.Mipas.theme;
   const isPanel = variant === 'panel';
@@ -501,6 +524,11 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
                     R$ {Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
+                )}
+                {canEdit ? (
+                  <InlineEdit value={p.instagram} placeholder="@instagram" width={90} onCommit={v => onUpdateInstagram(p.id, v)} />
+                ) : p.instagram && (
+                  <InstagramButton handle={p.instagram} />
                 )}
                 {list.ranking_enabled && canEdit && (
                   <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

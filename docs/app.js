@@ -34,6 +34,7 @@ function App() {
   const [pendingListPick, setPendingListPick] = useState(false);
   const [homeOpen, setHomeOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const [themeMode, setThemeMode] = useState(() => (document.body.classList.contains('light') ? 'light' : 'dark'));
 
   const toggleTheme = () => {
@@ -132,12 +133,22 @@ function App() {
 
   const goToPlace = (p) => {
     setTab('map');
-    setOpenListId(null);
+    // Desktop: esconde a lateral (mapa vira tela cheia) mas mantém a lista
+    // aberta, pro "Voltar" devolver exatamente onde a pessoa estava.
+    // Mobile: fecha o overlay da lista, como sempre.
+    if (isDesktop) setSidebarHidden(true);
+    else setOpenListId(null);
     setSelId(p.id);
     setTimeout(() => {
       leafRef.current.invalidateSize();
       leafRef.current.flyTo([p.latitude, p.longitude], 15, { duration: .8 });
     }, 60);
+  };
+
+  const backToSidebar = () => {
+    setSidebarHidden(false);
+    setSelId(null);
+    setTimeout(() => leafRef.current.invalidateSize(), 60);
   };
 
   const savePlace = async (d) => {
@@ -153,6 +164,7 @@ function App() {
         rating: d.rating === '' || d.rating == null ? null : parseFloat(d.rating),
         description: d.description?.trim() || null,
         avg_price: d.avg_price === '' || d.avg_price == null ? null : parseFloat(d.avg_price),
+        instagram: d.instagram?.trim().replace(/^@/, '') || null,
         list_id: d.list_id,
       });
       setPlaces(ps => [...ps, created]);
@@ -250,6 +262,15 @@ function App() {
     }
   };
 
+  const updateInstagram = async (placeId, instagram) => {
+    try {
+      const updated = await data.updatePlace(placeId, { instagram: instagram ? instagram.replace(/^@/, '') : null });
+      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
+    } catch (e) {
+      alert('Não deu pra salvar o Instagram.');
+    }
+  };
+
   const updateAvgPrice = async (placeId, avg_price) => {
     try {
       const updated = await data.updatePlace(placeId, { avg_price });
@@ -327,6 +348,14 @@ function App() {
         )}
       </button>
 
+      {isDesktop && sidebarHidden && (
+        <button onClick={backToSidebar} style={{
+          position: 'absolute', top: 16, left: 60, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
+          padding: '8px 14px', background: C.surface, fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5,
+          color: C.ink, cursor: 'pointer',
+        }}>‹ Voltar</button>
+      )}
+
       {showLoading && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 1000, background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter', fontWeight: 600, color: C.sub }}>
           Carregando…
@@ -389,7 +418,7 @@ function App() {
               <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
             )}
             {results.map((r, i) => (
-              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', note: '', category: '', rating: '', description: '', avg_price: '', list_id: lists[0]?.id })}
+              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', note: '', category: '', rating: '', description: '', avg_price: '', instagram: '', list_id: lists[0]?.id })}
                 style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
@@ -427,6 +456,7 @@ function App() {
           onUpdateRating={updateRating}
           onUpdateDescription={updateDescription}
           onUpdateAvgPrice={updateAvgPrice}
+          onUpdateInstagram={updateInstagram}
           onAddPhoto={addPhoto}
           onRemovePhoto={removePhoto}
           onToggleRanking={() => toggleRanking(openList)}
@@ -448,11 +478,12 @@ function App() {
       )}
 
       {sel && (isDesktop || tab === 'map') && !draft && (
-        <PlaceCard place={sel} list={lists.find(l => l.id === sel.list_id)} onClose={() => setSelId(null)} />
+        <PlaceCard place={sel} list={lists.find(l => l.id === sel.list_id)}
+          onClose={() => { if (isDesktop && sidebarHidden) backToSidebar(); else setSelId(null); }} />
       )}
     </div>
 
-    {isDesktop && (
+    {isDesktop && !sidebarHidden && (
       <div style={{ width: 380, flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden' }}>
         {openList ? (
           <ListDetail
@@ -468,6 +499,7 @@ function App() {
             onUpdateRating={updateRating}
             onUpdateDescription={updateDescription}
             onUpdateAvgPrice={updateAvgPrice}
+          onUpdateInstagram={updateInstagram}
             onAddPhoto={addPhoto}
             onRemovePhoto={removePhoto}
             onToggleRanking={() => toggleRanking(openList)}
