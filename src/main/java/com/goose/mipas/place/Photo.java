@@ -1,6 +1,5 @@
 package com.goose.mipas.place;
 
-import com.goose.mipas.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -18,34 +17,22 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "place")
+@Table(name = "place_photo")
 @Getter
 @Setter
 @NoArgsConstructor
-public class Place {
+public class Photo {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id", nullable = false)
-    private User owner;
+    @JoinColumn(name = "place_id", nullable = false)
+    private Place place;
 
-    @Column(name = "display_name", nullable = false)
-    private String displayName;
-
-    @Column(nullable = false, length = 500)
-    private String address;
-
-    @Column(nullable = false)
-    private Double latitude;
-
-    @Column(nullable = false)
-    private Double longitude;
-
-    @Column(columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "file_path", nullable = false, length = 500)
+    private String filePath;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
