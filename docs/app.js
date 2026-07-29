@@ -33,6 +33,7 @@ function App() {
   const [creatingList, setCreatingList] = useState(false);
   const [pendingListPick, setPendingListPick] = useState(false);
   const [homeOpen, setHomeOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 900px)').matches);
 
   const mapRef = useRef(null);
   const leafRef = useRef(null);
@@ -77,6 +78,17 @@ function App() {
     setTimeout(() => m.invalidateSize(), 300);
     return () => m.remove();
   }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 900px)');
+    const onChange = (e) => setIsDesktop(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    if (leafRef.current) setTimeout(() => leafRef.current.invalidateSize(), 250);
+  }, [isDesktop]);
 
   useEffect(() => {
     const m = leafRef.current;
@@ -130,6 +142,10 @@ function App() {
         latitude: d.lat,
         longitude: d.lng,
         note: d.note || null,
+        category: d.category?.trim() || null,
+        rating: d.rating === '' || d.rating == null ? null : parseFloat(d.rating),
+        description: d.description?.trim() || null,
+        avg_price: d.avg_price === '' || d.avg_price == null ? null : parseFloat(d.avg_price),
         list_id: d.list_id,
       });
       setPlaces(ps => [...ps, created]);
@@ -200,6 +216,61 @@ function App() {
     }
   };
 
+  const updateCategory = async (placeId, category) => {
+    try {
+      const updated = await data.updatePlace(placeId, { category });
+      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
+    } catch (e) {
+      alert('Não deu pra salvar a categoria.');
+    }
+  };
+
+  const updateRating = async (placeId, rating) => {
+    try {
+      const updated = await data.updatePlace(placeId, { rating });
+      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
+    } catch (e) {
+      alert('Não deu pra salvar a nota.');
+    }
+  };
+
+  const updateDescription = async (placeId, description) => {
+    try {
+      const updated = await data.updatePlace(placeId, { description });
+      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
+    } catch (e) {
+      alert('Não deu pra salvar a descrição.');
+    }
+  };
+
+  const updateAvgPrice = async (placeId, avg_price) => {
+    try {
+      const updated = await data.updatePlace(placeId, { avg_price });
+      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
+    } catch (e) {
+      alert('Não deu pra salvar o valor médio.');
+    }
+  };
+
+  const addPhoto = async (placeId, file) => {
+    try {
+      const photo = await data.uploadPhoto(session.user.id, placeId, file);
+      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: [...(p.photos || []), photo] } : p)));
+    } catch (e) {
+      alert('Não deu pra enviar a foto.');
+    }
+  };
+
+  const removePhoto = async (placeId, photo) => {
+    if (!confirm('Excluir essa foto?')) return;
+    try {
+      await data.deletePhoto(photo);
+      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: (p.photos || []).filter(ph => ph.id !== photo.id) } : p)));
+    } catch (e) {
+      alert('Não deu pra excluir a foto.');
+    }
+  };
+
   const toggleRanking = async (list) => {
     try {
       const updated = await data.updateList(list.id, { ranking_enabled: !list.ranking_enabled });
@@ -232,7 +303,8 @@ function App() {
   const showLoading = loadingData && lists.length === 0 && places.length === 0;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: C.paper, overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, background: C.paper, overflow: 'hidden', display: isDesktop ? 'flex' : 'block' }}>
+    <div style={isDesktop ? { position: 'relative', flex: '1 1 auto', minWidth: 0, height: '100%' } : { position: 'absolute', inset: 0 }}>
       <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 110, background: 'linear-gradient(rgba(18,18,20,.9),rgba(18,18,20,0))', pointerEvents: 'none', zIndex: 400 }} />
 
@@ -266,7 +338,7 @@ function App() {
         </button>
       )}
 
-      {tab === 'map' && !searchOpen && canEdit && (
+      {(isDesktop || tab === 'map') && !searchOpen && canEdit && (
         <div onClick={() => setSearchOpen(true)} style={{
           position: 'absolute', top: 66, left: 16, right: 90, zIndex: 500, cursor: 'pointer',
           background: C.surface, borderRadius: 999, padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 10,
@@ -298,7 +370,7 @@ function App() {
               <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
             )}
             {results.map((r, i) => (
-              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', note: '', list_id: lists[0]?.id })}
+              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', note: '', category: '', rating: '', description: '', avg_price: '', list_id: lists[0]?.id })}
                 style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
@@ -310,38 +382,19 @@ function App() {
         </div>
       )}
 
-      {tab === 'lists' && !openList && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink }}>Minhas listas</div>
-          <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {lists.map(l => {
-              const count = places.filter(p => p.list_id === l.id).length;
-              return (
-                <div key={l.id} onClick={() => setOpenListId(l.id)} style={{
-                  display: 'flex', alignItems: 'center', gap: 14, background: C.surface, borderRadius: 16,
-                  padding: '16px 16px', border: `1.5px solid ${C.line}`, cursor: 'pointer',
-                }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
-                    <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
-                  </div>
-                  <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
-                </div>
-              );
-            })}
-            {canEdit && (
-              <button onClick={() => setNewListOpen(true)} style={{
-                border: `2px dashed ${C.coral}66`, background: 'none', borderRadius: 16, padding: '18px',
-                fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.coral, cursor: 'pointer',
-              }}>+ Nova lista</button>
-            )}
-          </div>
-        </div>
+      {!isDesktop && tab === 'lists' && !openList && (
+        <ListsPanel
+          lists={lists}
+          places={places}
+          canEdit={canEdit}
+          onOpenList={setOpenListId}
+          onNewList={() => setNewListOpen(true)}
+          onBack={() => setTab('map')}
+          variant="overlay"
+        />
       )}
 
-      {openList && (
+      {!isDesktop && openList && (
         <ListDetail
           list={openList}
           places={places.filter(p => p.list_id === openList.id)}
@@ -351,12 +404,19 @@ function App() {
           onRemove={removePlace}
           onShare={() => shareList(openList)}
           onUpdateRank={updateRank}
+          onUpdateCategory={updateCategory}
+          onUpdateRating={updateRating}
+          onUpdateDescription={updateDescription}
+          onUpdateAvgPrice={updateAvgPrice}
+          onAddPhoto={addPhoto}
+          onRemovePhoto={removePhoto}
           onToggleRanking={() => toggleRanking(openList)}
           canEdit={canEdit}
+          variant="overlay"
         />
       )}
 
-      {!searchOpen && !draft && (
+      {!isDesktop && !searchOpen && !draft && (
         <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', zIndex: 700, display: 'flex', gap: 4, background: 'rgba(27,27,31,.9)', backdropFilter: 'blur(14px)', borderRadius: 999, padding: 5, border: `1.5px solid ${C.line}` }}>
           {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => (
             <button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} style={{
@@ -368,9 +428,45 @@ function App() {
         </div>
       )}
 
-      {sel && tab === 'map' && !draft && (
+      {sel && (isDesktop || tab === 'map') && !draft && (
         <PlaceCard place={sel} list={lists.find(l => l.id === sel.list_id)} onClose={() => setSelId(null)} />
       )}
+    </div>
+
+    {isDesktop && (
+      <div style={{ width: 380, flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden' }}>
+        {openList ? (
+          <ListDetail
+            list={openList}
+            places={places.filter(p => p.list_id === openList.id)}
+            home={home}
+            onBack={() => setOpenListId(null)}
+            onOpen={goToPlace}
+            onRemove={removePlace}
+            onShare={() => shareList(openList)}
+            onUpdateRank={updateRank}
+            onUpdateCategory={updateCategory}
+            onUpdateRating={updateRating}
+            onUpdateDescription={updateDescription}
+            onUpdateAvgPrice={updateAvgPrice}
+            onAddPhoto={addPhoto}
+            onRemovePhoto={removePhoto}
+            onToggleRanking={() => toggleRanking(openList)}
+            canEdit={canEdit}
+            variant="panel"
+          />
+        ) : (
+          <ListsPanel
+            lists={lists}
+            places={places}
+            canEdit={canEdit}
+            onOpenList={setOpenListId}
+            onNewList={() => setNewListOpen(true)}
+            variant="panel"
+          />
+        )}
+      </div>
+    )}
 
       {draft && (
         <SaveSheet

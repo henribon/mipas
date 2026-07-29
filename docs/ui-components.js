@@ -46,6 +46,24 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
           ))}
           <button onClick={onNewList} style={{ border: `1.5px dashed ${C.coral}88`, borderRadius: 999, padding: '8px 13px', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 13, background: 'none', color: C.coral }}>+ Nova</button>
         </div>
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Categoria <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, você escolhe o nome)</span></div>
+        <input value={draft.category || ''} onChange={e => set('category', e.target.value)} placeholder='Ex: "Bar", "Pizzaria", "Mirante"…'
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: C.ink }}>Nota <span style={{ color: C.sub, fontWeight: 500 }}>(0 a 10)</span></div>
+            <input type="number" min="0" max="10" step="0.5" value={draft.rating ?? ''} onChange={e => set('rating', e.target.value)} placeholder="—"
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: C.ink }}>Média de valor <span style={{ color: C.sub, fontWeight: 500 }}>(R$)</span></div>
+            <input type="number" min="0" step="0.01" value={draft.avg_price ?? ''} onChange={e => set('avg_price', e.target.value)} placeholder="—"
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+          </div>
+        </div>
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Descrição <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, visível pra quem ver a lista)</span></div>
+        <textarea value={draft.description || ''} onChange={e => set('description', e.target.value)} placeholder="Como é o lugar, o que pedir, vibe geral…" rows={2}
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Uma nota pra você do futuro <span style={{ color: C.sub, fontWeight: 500 }}>(opcional)</span></div>
         <textarea value={draft.note} onChange={e => set('note', e.target.value)} placeholder="Ex: pedir a mesa da janela…" rows={2}
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
@@ -191,36 +209,174 @@ function PlaceCard({ place, list, onClose }) {
   const C = window.Mipas.theme;
   return (
     <div style={{ position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 750, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, boxShadow: '0 14px 40px rgba(0,0,0,.5)', overflow: 'hidden', animation: 'sheetUp .28s cubic-bezier(.2,.9,.3,1)' }}>
-      <div style={{ height: 72, background: gradientForPlace(place, list), position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>
-        {list?.emoji || '📍'}
+      <div style={place.photos?.[0]
+        ? { height: 72, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, backgroundImage: `url(${place.photos[0].url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
+        : { height: 72, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: gradientForPlace(place, list) }}>
+        {!place.photos?.[0] && (list?.emoji || '📍')}
         <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.4)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.ink }}>✕</button>
       </div>
       <div style={{ padding: '14px 18px 16px' }}>
         <div style={{ fontFamily: 'Inter', fontSize: 17, fontWeight: 700, color: C.ink }}>{place.name}</div>
         <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 3 }}>{place.address}</div>
-        {list && <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginTop: 10, background: list.color + '1E', color: list.color, borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>{list.emoji} {list.name}</div>}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          {list && <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', background: list.color + '1E', color: list.color, borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>{list.emoji} {list.name}</div>}
+          {place.category && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '5px 12px' }}>{place.category}</div>}
+          {place.rating != null && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '5px 12px' }}>★ {place.rating}</div>}
+          {place.avg_price != null && (
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '5px 12px' }}>
+              R$ {Number(place.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          )}
+        </div>
+        {place.description && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.description}</div>}
         {place.note && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.note}</div>}
       </div>
     </div>
   );
 }
 
-function SortPill({ active, children, onClick }) {
+function InlineEdit({ value, placeholder, width, type, step, onCommit }) {
+  const { useState, useEffect } = React;
   const C = window.Mipas.theme;
+  const [val, setVal] = useState(value ?? '');
+  useEffect(() => { setVal(value ?? ''); }, [value]);
+  const commit = () => {
+    const next = type === 'number' ? (val === '' ? null : parseFloat(val)) : (val.trim() || null);
+    if (next !== (value ?? null)) onCommit(next);
+  };
+  if (type === 'textarea') {
+    return (
+      <textarea value={val} placeholder={placeholder} rows={2} onClick={ev => ev.stopPropagation()}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        style={{
+          width: '100%', boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10,
+          padding: '8px 12px', fontSize: 13, fontWeight: 500, color: C.ink, resize: 'none',
+        }} />
+    );
+  }
   return (
-    <button onClick={onClick} style={{
-      border: `1.5px solid ${active ? C.coral : C.line}`, borderRadius: 999, padding: '6px 12px', cursor: 'pointer',
-      fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5,
-      background: active ? C.coral + '22' : C.surface, color: active ? C.coral : C.sub,
-    }}>{children}</button>
+    <input type={type || 'text'} step={step} value={val} placeholder={placeholder} onClick={ev => ev.stopPropagation()}
+      onChange={e => setVal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+      style={{
+        width, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 999, padding: '4px 10px',
+        fontSize: 12, fontWeight: 700, color: C.ink, textAlign: type === 'number' ? 'center' : 'left',
+      }} />
   );
 }
 
-function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onUpdateRank, onToggleRanking, canEdit }) {
-  const { useState, useMemo } = React;
+function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, variant }) {
   const C = window.Mipas.theme;
+  const isPanel = variant === 'panel';
+  return (
+    <div style={isPanel
+      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
+      : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
+      {onBack && (
+        <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Mapa</button>
+      )}
+      <div style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink }}>Minhas listas</div>
+      <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {lists.map(l => {
+          const count = places.filter(p => p.list_id === l.id).length;
+          return (
+            <div key={l.id} onClick={() => onOpenList(l.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 14, background: C.surface, borderRadius: 16,
+              padding: '16px 16px', border: `1.5px solid ${C.line}`, cursor: 'pointer',
+            }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
+                <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
+              </div>
+              <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
+            </div>
+          );
+        })}
+        {canEdit && (
+          <button onClick={onNewList} style={{
+            border: `2px dashed ${C.coral}66`, background: 'none', borderRadius: 16, padding: '18px',
+            fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.coral, cursor: 'pointer',
+          }}>+ Nova lista</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PhotoStrip({ photos, canEdit, onAdd, onRemove }) {
+  const { useRef } = React;
+  const C = window.Mipas.theme;
+  const inputRef = useRef(null);
+  if (!canEdit && (!photos || photos.length === 0)) return null;
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (file) onAdd(file);
+    e.target.value = '';
+  };
+  return (
+    <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', gap: 8, overflowX: 'auto', marginTop: 10 }}>
+      {(photos || []).map(ph => (
+        <div key={ph.id} style={{ position: 'relative', flexShrink: 0, width: 64, height: 64, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.line}` }}>
+          <img src={ph.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          {canEdit && (
+            <button onClick={() => onRemove(ph)} style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '18px', padding: 0 }}>✕</button>
+          )}
+        </div>
+      ))}
+      {canEdit && (
+        <React.Fragment>
+          <button onClick={() => inputRef.current.click()} style={{ flexShrink: 0, width: 64, height: 64, borderRadius: 10, border: `1.5px dashed ${C.coral}66`, background: 'none', color: C.coral, fontSize: 22, fontWeight: 700, cursor: 'pointer' }}>+</button>
+          <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
+const SORT_LABELS = {
+  padrao: 'Padrão',
+  rank: 'Rank',
+  categoria: 'Categoria',
+  distancia: 'Distância',
+  nota: 'Nota',
+  valor: 'Valor',
+};
+
+const NUMERIC_SORT_ACCESSORS = {
+  rank: p => p.rank,
+  distancia: p => p.distanceKm,
+  nota: p => p.rating,
+  valor: p => p.avg_price,
+};
+
+function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onUpdateRank, onUpdateCategory, onUpdateRating, onUpdateDescription, onUpdateAvgPrice, onAddPhoto, onRemovePhoto, onToggleRanking, canEdit, variant }) {
+  const { useState, useMemo, useEffect } = React;
+  const C = window.Mipas.theme;
+  const isPanel = variant === 'panel';
   const [sortBy, setSortBy] = useState('padrao');
   const [sortDir, setSortDir] = useState('asc');
+
+  const hasCategories = places.some(p => p.category);
+  const hasRatings = places.some(p => p.rating != null);
+  const hasPrices = places.some(p => p.avg_price != null);
+
+  const sortOptions = useMemo(() => {
+    const opts = ['padrao'];
+    if (list.ranking_enabled) opts.push('rank');
+    if (hasCategories) opts.push('categoria');
+    if (hasRatings) opts.push('nota');
+    if (hasPrices) opts.push('valor');
+    if (home) opts.push('distancia');
+    return opts;
+  }, [list.ranking_enabled, hasCategories, hasRatings, hasPrices, home]);
+
+  useEffect(() => {
+    if (!sortOptions.includes(sortBy)) setSortBy('padrao');
+  }, [sortOptions]);
 
   const withDistance = useMemo(() => places.map(p => ({
     ...p,
@@ -231,31 +387,30 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
     if (sortBy === 'padrao') return withDistance;
     const dir = sortDir === 'asc' ? 1 : -1;
     const sorted = [...withDistance];
-    if (sortBy === 'rank') {
+    if (NUMERIC_SORT_ACCESSORS[sortBy]) {
+      const accessor = NUMERIC_SORT_ACCESSORS[sortBy];
       sorted.sort((a, b) => {
-        if (a.rank == null && b.rank == null) return 0;
-        if (a.rank == null) return 1;
-        if (b.rank == null) return -1;
-        return (a.rank - b.rank) * dir;
+        const av = accessor(a), bv = accessor(b);
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return (av - bv) * dir;
       });
-    } else if (sortBy === 'distancia') {
+    } else if (sortBy === 'categoria') {
       sorted.sort((a, b) => {
-        if (a.distanceKm == null && b.distanceKm == null) return 0;
-        if (a.distanceKm == null) return 1;
-        if (b.distanceKm == null) return -1;
-        return (a.distanceKm - b.distanceKm) * dir;
+        if (!a.category && !b.category) return 0;
+        if (!a.category) return 1;
+        if (!b.category) return -1;
+        return a.category.localeCompare(b.category, 'pt-BR') * dir;
       });
     }
     return sorted;
   }, [withDistance, sortBy, sortDir]);
 
-  const clickSort = (key) => {
-    if (sortBy !== key) { setSortBy(key); setSortDir('asc'); return; }
-    setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
-  };
-
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 650, background: C.paper, overflow: 'auto', padding: '62px 20px 120px' }}>
+    <div style={isPanel
+      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
+      : { position: 'absolute', inset: 0, zIndex: 650, background: C.paper, overflow: 'auto', padding: '62px 20px 120px' }}>
       <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Listas</button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ width: 52, height: 52, borderRadius: 16, background: list.color + '22', border: `1px solid ${list.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{list.emoji}</div>
@@ -279,17 +434,19 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
         </button>
       )}
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
-        <SortPill active={sortBy === 'padrao'} onClick={() => clickSort('padrao')}>Padrão</SortPill>
-        {list.ranking_enabled && (
-          <SortPill active={sortBy === 'rank'} onClick={() => clickSort('rank')}>
-            Rank {sortBy === 'rank' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-          </SortPill>
-        )}
-        {home && (
-          <SortPill active={sortBy === 'distancia'} onClick={() => clickSort('distancia')}>
-            Distância {sortBy === 'distancia' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-          </SortPill>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16 }}>
+        <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.sub }}>Ordenar por</span>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
+          border: `1.5px solid ${C.line}`, background: C.surface, borderRadius: 10, padding: '7px 10px',
+          fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.ink, cursor: 'pointer',
+        }}>
+          {sortOptions.map(opt => <option key={opt} value={opt}>{SORT_LABELS[opt]}</option>)}
+        </select>
+        {sortBy !== 'padrao' && (
+          <button onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))} title={sortDir === 'asc' ? 'Crescente' : 'Decrescente'} style={{
+            border: `1.5px solid ${C.line}`, background: C.surface, borderRadius: 10, width: 32, height: 32, cursor: 'pointer',
+            fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.coral,
+          }}>{sortDir === 'asc' ? '↑' : '↓'}</button>
         )}
       </div>
 
@@ -297,32 +454,65 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
         {sortedPlaces.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
         {sortedPlaces.map(p => (
           <div key={p.id} onClick={() => onOpen(p)} style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden', cursor: 'pointer' }}>
-            <div style={{ height: 64, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{list.emoji}</div>
+            <div style={p.photos?.[0]
+              ? { height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, backgroundImage: `url(${p.photos[0].url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
+              : { height: 64, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
+              {!p.photos?.[0] && list.emoji}
+            </div>
             <div style={{ padding: '12px 14px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
                 <div style={{ fontWeight: 700, fontSize: 15, color: C.ink }}>{p.name}</div>
                 {canEdit && <button onClick={ev => { ev.stopPropagation(); onRemove(p.id); }} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px' }}>Excluir</button>}
               </div>
               <div style={{ color: C.sub, fontWeight: 500, fontSize: 12.5, marginTop: 3 }}>{p.address}</div>
+              {canEdit ? (
+                <div style={{ marginTop: 8 }} onClick={ev => ev.stopPropagation()}>
+                  <InlineEdit value={p.description} placeholder="Descrição (visível pra quem vê a lista)" type="textarea" onCommit={v => onUpdateDescription(p.id, v)} />
+                </div>
+              ) : p.description && (
+                <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px' }}>{p.description}</div>
+              )}
               {p.note && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px' }}>{p.note}</div>}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
                 {p.distanceKm != null && (
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
                     {p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`}
                   </div>
                 )}
+                {canEdit ? (
+                  <InlineEdit value={p.category} placeholder="Categoria" width={90} onCommit={v => onUpdateCategory(p.id, v)} />
+                ) : p.category && (
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>{p.category}</div>
+                )}
+                {canEdit ? (
+                  <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Nota</span>
+                    <InlineEdit value={p.rating} placeholder="—" width={44} type="number" step="0.5" onCommit={v => onUpdateRating(p.id, v)} />
+                  </div>
+                ) : p.rating != null && (
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '4px 10px' }}>★ {p.rating}</div>
+                )}
+                {canEdit ? (
+                  <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>R$</span>
+                    <InlineEdit value={p.avg_price} placeholder="—" width={56} type="number" step="0.01" onCommit={v => onUpdateAvgPrice(p.id, v)} />
+                  </div>
+                ) : p.avg_price != null && (
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
+                    R$ {Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                )}
                 {list.ranking_enabled && canEdit && (
                   <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Rank</span>
-                    <input type="number" value={p.rank ?? ''} placeholder="—"
-                      onChange={e => onUpdateRank(p.id, e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                      style={{ width: 48, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 8, padding: '3px 6px', fontSize: 12.5, fontWeight: 700, color: C.ink, textAlign: 'center' }} />
+                    <InlineEdit value={p.rank} placeholder="—" width={48} type="number" onCommit={v => onUpdateRank(p.id, v)} />
                   </div>
                 )}
                 {list.ranking_enabled && !canEdit && p.rank != null && (
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '4px 10px' }}>#{p.rank}</div>
                 )}
               </div>
+              <PhotoStrip photos={p.photos} canEdit={canEdit} onAdd={file => onAddPhoto(p.id, file)} onRemove={photo => onRemovePhoto(p.id, photo)} />
             </div>
           </div>
         ))}
@@ -331,4 +521,4 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
   );
 }
 
-Object.assign(window, { Btn, SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListDetail, gradientForPlace });
+Object.assign(window, { Btn, SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, gradientForPlace });
