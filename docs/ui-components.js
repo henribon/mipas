@@ -208,11 +208,14 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
   );
 }
 
-// Endereço curto e clicável — abre o ponto exato (lat/lng) no Google Maps.
+// Endereço curto e clicável. A busca vai como texto (nome + endereço) pro
+// Google casar com a ficha do estabelecimento — com lat/lng ele abriria só um
+// pin solto na coordenada, sem foto/avaliações/horário.
 function AddressLink({ place, fontSize }) {
   const C = window.Mipas.theme;
+  const query = encodeURIComponent(`${place.name}, ${place.address}`);
   return (
-    <a href={`https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`}
+    <a href={`https://www.google.com/maps/search/?api=1&query=${query}`}
       target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
       title="Abrir no Google Maps"
       style={{ color: C.sub, fontWeight: 500, fontSize, textDecoration: 'none', cursor: 'pointer' }}
