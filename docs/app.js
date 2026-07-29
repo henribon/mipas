@@ -236,39 +236,24 @@ function App() {
     }
   };
 
-  const updateRank = async (placeId, rank) => {
+  // Salva o lugar inteiro de uma vez (botão Salvar do bloco): os campos vão
+  // numa requisição só, e as legendas das fotos alteradas em seguida.
+  const savePlaceEdits = async (placeId, patch, photoPatches) => {
     try {
-      const updated = await data.updatePlace(placeId, { rank });
-      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
+      let updated = null;
+      if (patch && Object.keys(patch).length > 0) {
+        updated = await data.updatePlace(placeId, patch);
+      }
+      const photos = await Promise.all((photoPatches || []).map(pp => data.updatePhoto(pp.id, pp.patch)));
+      setPlaces(ps => ps.map(p => {
+        if (p.id !== placeId) return p;
+        const base = updated || p;
+        if (photos.length === 0) return base;
+        return { ...base, photos: (base.photos || []).map(ph => photos.find(n => n.id === ph.id) || ph) };
+      }));
     } catch (e) {
-      alert('Não deu pra salvar o rank.');
-    }
-  };
-
-  const updateCategory = async (placeId, category) => {
-    try {
-      const updated = await data.updatePlace(placeId, { category });
-      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
-    } catch (e) {
-      alert('Não deu pra salvar a categoria.');
-    }
-  };
-
-  const updateRating = async (placeId, rating) => {
-    try {
-      const updated = await data.updatePlace(placeId, { rating });
-      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
-    } catch (e) {
-      alert('Não deu pra salvar a nota.');
-    }
-  };
-
-  const updateDescription = async (placeId, description) => {
-    try {
-      const updated = await data.updatePlace(placeId, { description });
-      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
-    } catch (e) {
-      alert('Não deu pra salvar a descrição.');
+      alert('Não deu pra salvar as alterações.');
+      throw e;
     }
   };
 
@@ -292,41 +277,12 @@ function App() {
     }
   };
 
-  const updateInstagram = async (placeId, instagram) => {
-    try {
-      const updated = await data.updatePlace(placeId, { instagram: instagram ? instagram.replace(/^@/, '') : null });
-      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
-    } catch (e) {
-      alert('Não deu pra salvar o Instagram.');
-    }
-  };
-
-  const updateAvgPrice = async (placeId, avg_price) => {
-    try {
-      const updated = await data.updatePlace(placeId, { avg_price });
-      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
-    } catch (e) {
-      alert('Não deu pra salvar o valor médio.');
-    }
-  };
-
   const addPhoto = async (placeId, file, title) => {
     try {
       const photo = await data.uploadPhoto(session.user.id, placeId, file, title);
       setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: [...(p.photos || []), photo] } : p)));
     } catch (e) {
       alert('Não deu pra enviar a foto.');
-    }
-  };
-
-  const updatePhotoMeta = async (placeId, photoId, patch) => {
-    try {
-      const updated = await data.updatePhoto(photoId, patch);
-      setPlaces(ps => ps.map(p => (p.id === placeId
-        ? { ...p, photos: (p.photos || []).map(ph => (ph.id === photoId ? updated : ph)) }
-        : p)));
-    } catch (e) {
-      alert('Não deu pra salvar os dados da foto.');
     }
   };
 
@@ -492,15 +448,9 @@ function App() {
           onOpen={goToPlace}
           onRemove={removePlace}
           onShare={() => shareList(openList)}
-          onUpdateRank={updateRank}
-          onUpdateCategory={updateCategory}
-          onUpdateRating={updateRating}
-          onUpdateDescription={updateDescription}
-          onUpdateAvgPrice={updateAvgPrice}
-          onUpdateInstagram={updateInstagram}
+          onSavePlace={savePlaceEdits}
           onAddPhoto={addPhoto}
           onRemovePhoto={removePhoto}
-          onUpdatePhoto={updatePhotoMeta}
           onToggleRanking={() => toggleRanking(openList)}
           onAutoRank={() => autoRankByRating(openList)}
           canEdit={canEdit}
@@ -545,17 +495,11 @@ function App() {
             onOpen={goToPlace}
             onRemove={removePlace}
             onShare={() => shareList(openList)}
-            onUpdateRank={updateRank}
-            onUpdateCategory={updateCategory}
-            onUpdateRating={updateRating}
-            onUpdateDescription={updateDescription}
-            onUpdateAvgPrice={updateAvgPrice}
-          onUpdateInstagram={updateInstagram}
+            onSavePlace={savePlaceEdits}
             onAddPhoto={addPhoto}
             onRemovePhoto={removePhoto}
-          onUpdatePhoto={updatePhotoMeta}
             onToggleRanking={() => toggleRanking(openList)}
-          onAutoRank={() => autoRankByRating(openList)}
+            onAutoRank={() => autoRankByRating(openList)}
             canEdit={canEdit}
             variant="panel"
           />

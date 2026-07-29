@@ -249,13 +249,14 @@ function PlaceCard({ place, list, onClose }) {
   const photos = place.photos || [];
   return (
     <div style={{ position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 750, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, boxShadow: '0 14px 40px rgba(0,0,0,.5)', overflow: 'hidden', animation: 'sheetUp .28s cubic-bezier(.2,.9,.3,1)' }}>
-      <div style={{ height: 72, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, background: gradientForPlace(place, list) }}>
-        {list?.emoji || '📍'}
+      <div style={{ height: 64, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: gradientForPlace(place, list) }}>
+        <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 16, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 52px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+          {place.name}
+        </div>
         <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.4)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.ink }}>✕</button>
       </div>
       <div style={{ padding: '14px 18px 16px' }}>
-        <div style={{ fontFamily: 'Inter', fontSize: 17, fontWeight: 700, color: C.ink }}>{place.name}</div>
-        <div style={{ marginTop: 3 }}><AddressLink place={place} fontSize={13} /></div>
+        <AddressLink place={place} fontSize={13} />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
           {list && <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', background: list.color + '1E', color: list.color, borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>{list.emoji} {list.name}</div>}
           {place.category && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '5px 12px' }}>{place.category}</div>}
@@ -285,38 +286,6 @@ function PlaceCard({ place, list, onClose }) {
 
       {openId && <PhotoLightbox photos={photos} openId={openId} onSetId={setOpenId} onClose={() => setOpenId(null)} />}
     </div>
-  );
-}
-
-function InlineEdit({ value, placeholder, width, type, step, onCommit }) {
-  const { useState, useEffect } = React;
-  const C = window.Mipas.theme;
-  const [val, setVal] = useState(value ?? '');
-  useEffect(() => { setVal(value ?? ''); }, [value]);
-  const commit = () => {
-    const next = type === 'number' ? (val === '' ? null : parseFloat(val)) : (val.trim() || null);
-    if (next !== (value ?? null)) onCommit(next);
-  };
-  if (type === 'textarea') {
-    return (
-      <textarea value={val} placeholder={placeholder} rows={2} onClick={ev => ev.stopPropagation()}
-        onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        style={{
-          width: '100%', boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10,
-          padding: '8px 12px', fontSize: 13, fontWeight: 500, color: C.ink, resize: 'none',
-        }} />
-    );
-  }
-  return (
-    <input type={type || 'text'} step={step} value={val} placeholder={placeholder} onClick={ev => ev.stopPropagation()}
-      onChange={e => setVal(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-      style={{
-        width, boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`, borderRadius: 999, padding: '4px 10px',
-        fontSize: 12, fontWeight: 700, color: C.ink, textAlign: type === 'number' ? 'center' : 'left',
-      }} />
   );
 }
 
@@ -365,13 +334,21 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
 // grande no visualizador. Fotos com o mesmo título (ex: "Macarronada") formam
 // um grupo com legenda própria; a descrição é do grupo (gravada em todas as
 // fotos dele). Fotos sem título ficam soltas no fim.
-function PhotoGallery({ photos, canEdit, onAdd, onRemove, onUpdate }) {
+function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove }) {
   const { useRef, useState } = React;
   const C = window.Mipas.theme;
   const inputRef = useRef(null);
   const pendingTitleRef = useRef(null);
   const [openId, setOpenId] = useState(null);
   if (!canEdit && (!photos || photos.length === 0)) return null;
+
+  // Valor em edição (rascunho) ou o que está salvo. O agrupamento continua
+  // usando o título SALVO: se reagrupasse a cada tecla, o campo saltaria de
+  // grupo no meio da digitação.
+  const val = (ph, campo) => {
+    const e = (edits || {})[ph.id] || {};
+    return campo in e ? e[campo] : (ph[campo] ?? '');
+  };
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -410,6 +387,11 @@ function PhotoGallery({ photos, canEdit, onAdd, onRemove, onUpdate }) {
     }}>+</button>
   );
 
+  const draftInput = {
+    width: '100%', boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`,
+    borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: C.ink,
+  };
+
   return (
     <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
       {groups.map(g => {
@@ -418,8 +400,12 @@ function PhotoGallery({ photos, canEdit, onAdd, onRemove, onUpdate }) {
           <div key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {canEdit ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <InlineEdit value={g.title} placeholder="Título" width="100%" onCommit={v => g.items.forEach(ph => onUpdate(ph, { title: v }))} />
-                <InlineEdit value={desc} placeholder="Descrição dessas fotos" width="100%" onCommit={v => g.items.forEach(ph => onUpdate(ph, { description: v }))} />
+                <input value={val(g.items[0], 'title')} placeholder="Título"
+                  onChange={e => g.items.forEach(ph => onEdit(ph.id, { title: e.target.value }))}
+                  style={draftInput} />
+                <input value={val(g.items[0], 'description')} placeholder="Descrição dessas fotos"
+                  onChange={e => g.items.forEach(ph => onEdit(ph.id, { description: e.target.value }))}
+                  style={draftInput} />
               </div>
             ) : (
               <div>
@@ -441,7 +427,8 @@ function PhotoGallery({ photos, canEdit, onAdd, onRemove, onUpdate }) {
             canEdit ? (
               <div key={ph.id} style={{ flexShrink: 0, width: 110, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {thumb(ph)}
-                <InlineEdit value={ph.title} placeholder="Título" width="100%" onCommit={v => onUpdate(ph, { title: v })} />
+                <input value={val(ph, 'title')} placeholder="Título"
+                  onChange={e => onEdit(ph.id, { title: e.target.value })} style={draftInput} />
               </div>
             ) : thumb(ph)
           ))}
@@ -541,10 +528,187 @@ const NUMERIC_SORT_ACCESSORS = {
   valor: p => p.avg_price,
 };
 
-function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onUpdateRank, onUpdateCategory, onUpdateRating, onUpdateDescription, onUpdateAvgPrice, onUpdateInstagram, onAddPhoto, onRemovePhoto, onUpdatePhoto, onToggleRanking, onAutoRank, canEdit, variant }) {
+// Um lugar da lista. Fechado por padrão (só o essencial), abre ao clicar —
+// sem isso a lista virava uma coluna gigante de cartões. Aberto, o conteúdo
+// tem altura máxima com rolagem própria. A edição é um rascunho local: nada
+// vai pro banco até clicar em Salvar, e aí vai tudo numa requisição só.
+function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRemove, onSave, onAddPhoto, onRemovePhoto }) {
+  const { useState, useEffect, useMemo } = React;
+  const C = window.Mipas.theme;
+
+  const fromPlace = () => ({
+    description: p.description ?? '',
+    category: p.category ?? '',
+    rating: p.rating ?? '',
+    avg_price: p.avg_price ?? '',
+    instagram: p.instagram ?? '',
+    rank: p.rank ?? '',
+  });
+  const [draft, setDraft] = useState(fromPlace);
+  const [photoEdits, setPhotoEdits] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  // Recarrega o rascunho quando o lugar muda no servidor (ex: "Rankear por
+  // nota") — mas não enquanto está salvando, pra não piscar valor antigo.
+  useEffect(() => {
+    if (!saving) { setDraft(fromPlace()); setPhotoEdits({}); }
+  }, [p.id, p.description, p.category, p.rating, p.avg_price, p.instagram, p.rank]);
+
+  const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+  const editPhoto = (photoId, patch) => setPhotoEdits(m => ({ ...m, [photoId]: { ...(m[photoId] || {}), ...patch } }));
+
+  const NORM = {
+    description: v => (String(v).trim() || null),
+    category: v => (String(v).trim() || null),
+    instagram: v => (String(v).trim().replace(/^@/, '') || null),
+    rating: v => (v === '' || v == null ? null : parseFloat(v)),
+    avg_price: v => (v === '' || v == null ? null : parseFloat(v)),
+    rank: v => (v === '' || v == null ? null : parseInt(v, 10)),
+  };
+
+  const patch = useMemo(() => {
+    const out = {};
+    Object.keys(NORM).forEach(k => {
+      const next = NORM[k](draft[k]);
+      const cur = p[k] ?? null;
+      const igual = (next === null && cur === null) || (next !== null && cur !== null && String(next) === String(cur));
+      if (!igual) out[k] = next;
+    });
+    return out;
+  }, [draft, p]);
+
+  const photoPatches = useMemo(() => Object.entries(photoEdits).map(([id, patch]) => {
+    const ph = (p.photos || []).find(x => x.id === id);
+    if (!ph) return null;
+    const out = {};
+    ['title', 'description'].forEach(k => {
+      if (!(k in patch)) return;
+      const next = String(patch[k] ?? '').trim() || null;
+      if (next !== (ph[k] ?? null)) out[k] = next;
+    });
+    return Object.keys(out).length ? { id, patch: out } : null;
+  }).filter(Boolean), [photoEdits, p.photos]);
+
+  const dirty = Object.keys(patch).length > 0 || photoPatches.length > 0;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(p.id, patch, photoPatches);
+      setPhotoEdits({});
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancel = () => { setDraft(fromPlace()); setPhotoEdits({}); };
+
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`,
+    borderRadius: 10, padding: '8px 11px', fontSize: 13, fontWeight: 600, color: C.ink,
+  };
+  const field = (label, node) => (
+    <div style={{ flex: 1, minWidth: 92 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, marginBottom: 4 }}>{label}</div>
+      {node}
+    </div>
+  );
+
+  const chip = (texto, cor) => (
+    <div key={texto} style={{ fontSize: 12, fontWeight: 700, color: cor || C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '4px 10px' }}>{texto}</div>
+  );
+
+  const nFotos = (p.photos || []).length;
+
+  return (
+    <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
+      <div onClick={onToggle} title={expanded ? 'Fechar' : 'Abrir detalhes'}
+        style={{ height: 56, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: 'pointer' }}>
+        <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 15, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 38px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+          {p.name}
+        </div>
+        <span style={{ position: 'absolute', right: 14, color: 'rgba(255,255,255,.85)', fontSize: 13, fontWeight: 700 }}>{expanded ? '▴' : '▾'}</span>
+      </div>
+
+      <div style={{ padding: '10px 14px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+          <AddressLink place={p} fontSize={12.5} />
+          <button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" style={{
+            border: `1px solid ${C.line}`, background: C.cream, borderRadius: 999, padding: '3px 10px',
+            fontFamily: 'Inter', fontWeight: 700, fontSize: 11.5, color: C.coral, cursor: 'pointer', flexShrink: 0,
+          }}>no mapa</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+          {p.distanceKm != null && chip(p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`)}
+          {p.category && chip(p.category)}
+          {p.rating != null && chip(`★ ${p.rating}`, C.coral)}
+          {p.avg_price != null && chip(`R$ ${Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+          {list.ranking_enabled && p.rank != null && chip(`#${p.rank}`, C.coral)}
+          {p.instagram && <InstagramButton handle={p.instagram} />}
+          {nFotos > 0 && chip(`${nFotos} ${nFotos === 1 ? 'foto' : 'fotos'}`)}
+        </div>
+
+        {!expanded && p.description && (
+          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 500, color: C.sub, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {p.description}
+          </div>
+        )}
+
+        {expanded && (
+          <React.Fragment>
+            <div style={{ maxHeight: 340, overflowY: 'auto', marginTop: 10, paddingRight: 2 }}>
+              {canEdit ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {field('Descrição', (
+                    <textarea value={draft.description} onChange={e => set('description', e.target.value)} rows={3}
+                      placeholder="Como é o lugar, o que pedir, vibe geral…"
+                      style={{ ...inputStyle, fontWeight: 500, resize: 'vertical' }} />
+                  ))}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {field('Categoria', <input value={draft.category} onChange={e => set('category', e.target.value)} placeholder="Ex: Bar" style={inputStyle} />)}
+                    {field('Nota', <input type="number" min="0" max="10" step="0.5" value={draft.rating} onChange={e => set('rating', e.target.value)} placeholder="—" style={inputStyle} />)}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {field('Valor médio (R$)', <input type="number" min="0" step="0.01" value={draft.avg_price} onChange={e => set('avg_price', e.target.value)} placeholder="—" style={inputStyle} />)}
+                    {list.ranking_enabled && field('Rank', <input type="number" value={draft.rank} onChange={e => set('rank', e.target.value)} placeholder="—" style={inputStyle} />)}
+                  </div>
+                  {field('Instagram', <input value={draft.instagram} onChange={e => set('instagram', e.target.value)} placeholder="@dolugar" style={inputStyle} />)}
+                </div>
+              ) : p.description && (
+                <div style={{ fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{p.description}</div>
+              )}
+
+              <PhotoGallery photos={p.photos} canEdit={canEdit} edits={photoEdits} onEdit={editPhoto}
+                onAdd={(file, title) => onAddPhoto(p.id, file, title)}
+                onRemove={photo => onRemovePhoto(p.id, photo)} />
+            </div>
+
+            {canEdit && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
+                <button onClick={save} disabled={!dirty || saving} style={{
+                  border: 'none', borderRadius: 10, padding: '9px 18px', fontFamily: 'Inter', fontWeight: 700, fontSize: 13,
+                  background: C.coral, color: '#fff', cursor: dirty && !saving ? 'pointer' : 'default', opacity: dirty && !saving ? 1 : .45,
+                }}>{saving ? 'Salvando…' : 'Salvar'}</button>
+                {dirty && !saving && (
+                  <button onClick={cancel} style={{ border: `1px solid ${C.line}`, background: 'none', borderRadius: 10, padding: '9px 14px', fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.sub, cursor: 'pointer' }}>Desfazer</button>
+                )}
+                <div style={{ flex: 1 }} />
+                <button onClick={() => onRemove(p.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px' }}>Excluir</button>
+              </div>
+            )}
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onToggleRanking, onAutoRank, canEdit, variant }) {
   const { useState, useMemo, useEffect } = React;
   const C = window.Mipas.theme;
   const isPanel = variant === 'panel';
+  const [expandedId, setExpandedId] = useState(null);
   const [sortBy, setSortBy] = useState('padrao');
   const [sortDir, setSortDir] = useState('asc');
 
@@ -649,71 +813,14 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
         {sortedPlaces.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
         {sortedPlaces.map(p => (
-          <div key={p.id} onClick={() => onOpen(p)} style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden', cursor: 'pointer' }}>
-            <div style={{ height: 64, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 16, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 14px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                {p.name}
-              </div>
-            </div>
-            <div style={{ padding: '12px 14px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                <AddressLink place={p} fontSize={12.5} />
-                {canEdit && <button onClick={ev => { ev.stopPropagation(); onRemove(p.id); }} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px', flexShrink: 0 }}>Excluir</button>}
-              </div>
-              {canEdit ? (
-                <div style={{ marginTop: 8 }} onClick={ev => ev.stopPropagation()}>
-                  <InlineEdit value={p.description} placeholder="Descrição (visível pra quem vê a lista)" type="textarea" onCommit={v => onUpdateDescription(p.id, v)} />
-                </div>
-              ) : p.description && (
-                <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px', whiteSpace: 'pre-wrap' }}>{p.description}</div>
-              )}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
-                {p.distanceKm != null && (
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
-                    {p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`}
-                  </div>
-                )}
-                {canEdit ? (
-                  <InlineEdit value={p.category} placeholder="Categoria" width={90} onCommit={v => onUpdateCategory(p.id, v)} />
-                ) : p.category && (
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>{p.category}</div>
-                )}
-                {canEdit ? (
-                  <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Nota</span>
-                    <InlineEdit value={p.rating} placeholder="—" width={44} type="number" step="0.5" onCommit={v => onUpdateRating(p.id, v)} />
-                  </div>
-                ) : p.rating != null && (
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '4px 10px' }}>★ {p.rating}</div>
-                )}
-                {canEdit ? (
-                  <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>R$</span>
-                    <InlineEdit value={p.avg_price} placeholder="—" width={56} type="number" step="0.01" onCommit={v => onUpdateAvgPrice(p.id, v)} />
-                  </div>
-                ) : p.avg_price != null && (
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
-                    R$ {Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                )}
-                {canEdit ? (
-                  <InlineEdit value={p.instagram} placeholder="@instagram" width={90} onCommit={v => onUpdateInstagram(p.id, v)} />
-                ) : p.instagram && (
-                  <InstagramButton handle={p.instagram} />
-                )}
-                {list.ranking_enabled && canEdit && (
-                  <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Rank</span>
-                    <InlineEdit value={p.rank} placeholder="—" width={48} type="number" onCommit={v => onUpdateRank(p.id, v)} />
-                  </div>
-                )}
-                {list.ranking_enabled && !canEdit && p.rank != null && (
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '4px 10px' }}>#{p.rank}</div>
-                )}
-              </div>
-              <PhotoGallery photos={p.photos} canEdit={canEdit} onAdd={(file, title) => onAddPhoto(p.id, file, title)} onRemove={photo => onRemovePhoto(p.id, photo)} onUpdate={(photo, patch) => onUpdatePhoto(p.id, photo.id, patch)} />
-            </div>
-          </div>
+          <PlaceRow key={p.id} place={p} list={list} canEdit={canEdit}
+            expanded={expandedId === p.id}
+            onToggle={() => setExpandedId(id => (id === p.id ? null : p.id))}
+            onOpenMap={onOpen}
+            onRemove={onRemove}
+            onSave={onSavePlace}
+            onAddPhoto={onAddPhoto}
+            onRemovePhoto={onRemovePhoto} />
         ))}
       </div>
     </div>
