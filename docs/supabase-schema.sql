@@ -158,19 +158,56 @@ create policy "owner can delete own photos" on public.place_photos
   for delete to authenticated using (auth.uid() = owner_id);
 
 -- ---------------------------------------------------------
+-- Privacidade por COLUNA. RLS filtra linhas, não colunas: sem isto, quem
+-- abre uma lista pública lê todas as colunas dessas linhas — inclusive
+-- "note", que na interface é a nota pessoal do dono. Em Postgres não dá pra
+-- revogar uma coluna solta enquanto existe SELECT no nível da tabela: revoga
+-- a tabela e reconcede só as colunas públicas.
+-- ---------------------------------------------------------
+
+revoke select on public.lists from anon;
+grant select (id, name, emoji, color, is_public, ranking_enabled, created_at)
+  on public.lists to anon;
+
+revoke select on public.places from anon;
+grant select (id, list_id, name, address, latitude, longitude,
+              rank, category, rating, description, avg_price, instagram, created_at)
+  on public.places to anon;
+
+revoke select on public.place_photos from anon;
+grant select (id, place_id, storage_path, title, description, created_at)
+  on public.place_photos to anon;
+
+-- ---------------------------------------------------------
 -- Storage — bucket de fotos ("place-photos")
--- Bucket público pra LEITURA (assim fotos aparecem em listas públicas sem
--- login, igual o resto do app). Escrita (upload/update/delete) só o dono,
--- via policy que confere o primeiro segmento do caminho = auth.uid() —
--- por isso o app sempre salva fotos em "{owner_id}/{place_id}/arquivo.ext".
+-- Bucket PRIVADO: com bucket público qualquer URL de foto abre sem login,
+-- inclusive de lista privada, e a policy de leitura permitia listar o bucket
+-- inteiro (ou seja, descobrir os caminhos de todas as fotos). Agora a leitura
+-- passa pelas mesmas regras das listas, e o app serve as imagens por URL
+-- assinada temporária. Escrita (upload/update/delete) só o dono, via policy
+-- que confere o primeiro segmento do caminho = auth.uid() — por isso o app
+-- sempre salva fotos em "{owner_id}/{place_id}/arquivo.ext".
 -- ---------------------------------------------------------
 
 insert into storage.buckets (id, name, public)
-values ('place-photos', 'place-photos', true)
-on conflict (id) do nothing;
+values ('place-photos', 'place-photos', false)
+on conflict (id) do update set public = false;
 
-create policy "public can view place photos" on storage.objects
-  for select to anon, authenticated using (bucket_id = 'place-photos');
+create policy "anyone can read photos of public lists" on storage.objects
+  for select to anon, authenticated using (
+    bucket_id = 'place-photos'
+    and exists (
+      select 1 from public.place_photos ph
+      join public.places p on p.id = ph.place_id
+      join public.lists l on l.id = p.list_id
+      where ph.storage_path = storage.objects.name and l.is_public = true
+    )
+  );
+
+create policy "owner can read own place photos" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'place-photos' and (storage.foldername(name))[1] = auth.uid()::text
+  );
 
 create policy "owner can upload own place photos" on storage.objects
   for insert to authenticated with check (
@@ -302,3 +339,52 @@ create policy "owner can delete own place photos" on storage.objects
   for delete to authenticated using (
     bucket_id = 'place-photos' and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- ---------------------------------------------------------
+-- Migração incremental (2026-07-29b) — correções de privacidade.
+-- 1) "note" (nota pessoal) e "owner_id" deixam de ser legíveis por anon.
+-- 2) Bucket de fotos deixa de ser público; leitura passa a seguir as mesmas
+--    regras das listas, e o app serve imagens por URL assinada.
+-- ATENÇÃO: rodar isto junto com o deploy do site novo — o site antigo usa
+-- select('*') e getPublicUrl(), que param de funcionar depois desta migração.
+-- Idempotente: pode rodar de novo sem erro.
+-- ---------------------------------------------------------
+
+revoke select on public.lists from anon;
+grant select (id, name, emoji, color, is_public, ranking_enabled, created_at)
+  on public.lists to anon;
+
+revoke select on public.places from anon;
+grant select (id, list_id, name, address, latitude, longitude,
+              rank, category, rating, description, avg_price, instagram, created_at)
+  on public.places to anon;
+
+revoke select on public.place_photos from anon;
+grant select (id, place_id, storage_path, title, description, created_at)
+  on public.place_photos to anon;
+
+update storage.buckets set public = false where id = 'place-photos';
+
+drop policy if exists "public can view place photos" on storage.objects;
+
+drop policy if exists "anyone can read photos of public lists" on storage.objects;
+create policy "anyone can read photos of public lists" on storage.objects
+  for select to anon, authenticated using (
+    bucket_id = 'place-photos'
+    and exists (
+      select 1 from public.place_photos ph
+      join public.places p on p.id = ph.place_id
+      join public.lists l on l.id = p.list_id
+      where ph.storage_path = storage.objects.name and l.is_public = true
+    )
+  );
+
+drop policy if exists "owner can read own place photos" on storage.objects;
+create policy "owner can read own place photos" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'place-photos' and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- O PostgREST guarda as permissões em cache; sem isto as mudanças de grant
+-- acima podem demorar a valer na API REST.
+notify pgrst, 'reload schema';

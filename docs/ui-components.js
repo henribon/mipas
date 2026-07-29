@@ -67,7 +67,7 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Descrição <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, visível pra quem ver a lista)</span></div>
         <textarea value={draft.description || ''} onChange={e => set('description', e.target.value)} placeholder="Como é o lugar, o que pedir, vibe geral…" rows={2}
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
-        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Uma nota pra você do futuro <span style={{ color: C.sub, fontWeight: 500 }}>(opcional)</span></div>
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Uma nota pra você do futuro <span style={{ color: C.sub, fontWeight: 500 }}>(só você vê, nem quem abrir o link)</span></div>
         <textarea value={draft.note} onChange={e => set('note', e.target.value)} placeholder="Ex: pedir a mesa da janela…" rows={2}
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
