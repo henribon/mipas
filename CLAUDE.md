@@ -29,52 +29,38 @@ implementado — é direção de produto, não escopo atual.
 
 ## Status atual do projeto
 
-O projeto começou como um backend Java/Spring Boot + PostgreSQL autogerenciado
-(ver seção "Stack técnica (pausada)" abaixo). O usuário percebeu que não tinha
-como hospedar um banco Postgres nem manter um servidor Java rodando 24/7 sem
-custo, e decidiu pivotar — por enquanto — para algo que roda **inteiramente no
-navegador**, sem custo, só pra ele + amigos:
+O Mipas é hoje um site estático (React no navegador) + Supabase, sem backend
+próprio — roda inteiramente no free tier, só pro dono + amigos:
 
 - **Site estático** na pasta [`/docs`](docs/), publicado via **GitHub Pages**
   direto da branch `main` (Settings → Pages → Folder `/docs`), sem build step,
   sem GitHub Actions.
-- **Supabase** (Postgres gerenciado + API REST automática + Auth, free tier)
-  como backend, no lugar do Postgres autogerenciado. Schema e políticas de
-  Row Level Security em [`docs/supabase-schema.sql`](docs/supabase-schema.sql).
+- **Supabase** (Postgres gerenciado + API REST automática + Auth + Storage,
+  free tier) como backend. Schema, políticas de Row Level Security e bucket
+  de fotos em [`docs/supabase-schema.sql`](docs/supabase-schema.sql) —
+  mudanças de schema entram como bloco de migração incremental idempotente no
+  fim desse arquivo, pra rodar no SQL Editor do dashboard.
 - React rodando via Babel Standalone direto no navegador (zero bundler/npm),
   carregado via CDN — ver `docs/index.html` pra ordem de carregamento dos
-  módulos.
+  módulos. Módulos se comunicam pelo namespace global `window.Mipas`.
 - Autenticação: só o dono loga (email/senha, criado manualmente no dashboard
   do Supabase); amigos só visualizam listas marcadas como públicas via link
   (`?list=<uuid>`), sem precisar de conta.
 
-O esqueleto Java/Spring Boot abaixo **fica parado no repo, sem ser apagado**,
-para uma eventual evolução futura do produto (ex: se o projeto crescer além
-do uso pessoal e precisar de um backend próprio outra vez).
+## Histórico: backend Java (arquivado)
 
-## Stack técnica (pausada — não é o caminho ativo hoje)
-
-- **Java 25**
-- **Spring Boot 4.1.1-SNAPSHOT** (atenção: é uma versão SNAPSHOT/pré-release,
-  por isso o `pom.xml` referencia o repositório `spring-snapshots`)
-- **Maven** (usar o wrapper `mvnw` / `mvnw.cmd`)
-- **Lombok**
-- **PostgreSQL** — banco de dados escolhido (ainda não configurado no
-  projeto)
-- **Flyway** — versionamento de schema do banco (ainda não configurado no
-  projeto)
-
-Grupo Maven: `com.goose`, artifact: `mipas`, pacote raiz:
-`com.goose.mipas`.
+O projeto começou como um backend Java/Spring Boot + PostgreSQL
+autogerenciado, mas hospedar Postgres + servidor Java 24/7 sem custo não era
+viável e o projeto pivotou pra stack acima. Esse código Java **não vive mais
+na `main`** — está guardado na branch [`java-backend-archive`](https://github.com/henribon/mipas/tree/java-backend-archive),
+caso o produto um dia cresça e precise de backend próprio de novo.
 
 ## Convenções e decisões
 
-- **Todo o código é em inglês** — nomes de classes, métodos, variáveis,
-  pacotes, tabelas/colunas do banco, migrations, commits, comentários etc.
-  Português fica só para conversas com o usuário e documentação de produto
-  como este arquivo.
-- Nenhuma decisão de arquitetura de API (REST/GraphQL), autenticação, ou
-  modelagem de entidades foi tomada ainda — validar com o usuário antes de
-  assumir.
-- Ao adicionar Postgres/Flyway, seguir a estrutura padrão de migrations do
-  Flyway (`src/main/resources/db/migration`, arquivos `V{n}__descricao.sql`).
+- **Todo o código é em inglês** — nomes de variáveis, funções, tabelas/colunas
+  do banco, commits, comentários etc. Português fica só para conversas com o
+  usuário, textos da interface e documentação de produto como este arquivo.
+- Campos opcionais de um lugar (categoria, nota, descrição, valor médio,
+  fotos) nunca aparecem na visualização pública quando vazios.
+- Dados privados do dono (ex: tabela `user_home`, o ponto "casa" usado pra
+  ordenar por distância) nunca ganham policy de leitura pra `anon`.
