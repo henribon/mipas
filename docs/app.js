@@ -35,6 +35,9 @@ function App() {
   const [homeOpen, setHomeOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  // Mobile: lista de onde a pessoa veio ao abrir um destaque no mapa — o X do
+  // card volta pra ela. Tocar no mapa limpa isso (a pessoa "ficou" no mapa).
+  const [returnListId, setReturnListId] = useState(null);
   const [themeMode, setThemeMode] = useState(() => (document.body.classList.contains('light') ? 'light' : 'dark'));
 
   const toggleTheme = () => {
@@ -83,6 +86,9 @@ function App() {
   useEffect(() => {
     const m = window.Mipas.map.initMap(mapRef.current);
     leafRef.current = m;
+    // Tocar no fundo do mapa (fora de pins e cards) fecha o destaque e desfaz
+    // o "voltar pra lista" — a pessoa escolheu ficar só no mapa.
+    m.on('click', () => { setSelId(null); setReturnListId(null); });
     setTimeout(() => m.invalidateSize(), 300);
     return () => m.remove();
   }, []);
@@ -105,6 +111,7 @@ function App() {
       setSelId(p.id);
       setTab('map');
       setOpenListId(null);
+      setReturnListId(null);
       m.flyTo([p.latitude, p.longitude], Math.max(m.getZoom(), 14), { duration: .6 });
     });
   }, [places, lists]);
@@ -136,8 +143,12 @@ function App() {
     // Desktop: esconde a lateral (mapa vira tela cheia) mas mantém a lista
     // aberta, pro "Voltar" devolver exatamente onde a pessoa estava.
     // Mobile: fecha o overlay da lista, como sempre.
-    if (isDesktop) setSidebarHidden(true);
-    else setOpenListId(null);
+    if (isDesktop) {
+      setSidebarHidden(true);
+    } else {
+      setReturnListId(openListId);
+      setOpenListId(null);
+    }
     setSelId(p.id);
     setTimeout(() => {
       leafRef.current.invalidateSize();
@@ -512,7 +523,15 @@ function App() {
 
       {sel && (isDesktop || tab === 'map') && !draft && (
         <PlaceCard place={sel} list={lists.find(l => l.id === sel.list_id)}
-          onClose={() => { if (isDesktop && sidebarHidden) backToSidebar(); else setSelId(null); }} />
+          onClose={() => {
+            if (isDesktop && sidebarHidden) { backToSidebar(); return; }
+            if (!isDesktop && returnListId) {
+              setOpenListId(returnListId);
+              setReturnListId(null);
+              setTab('lists');
+            }
+            setSelId(null);
+          }} />
       )}
     </div>
 
