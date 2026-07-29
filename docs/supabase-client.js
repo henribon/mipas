@@ -65,9 +65,29 @@ window.Mipas = window.Mipas || {};
     if (error) throw error;
   }
 
+  async function fetchHome() {
+    const { data, error } = await client.from('user_home').select('*').maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async function saveHome(ownerId, { latitude, longitude }) {
+    const { data, error } = await client.from('user_home')
+      .upsert({ owner_id: ownerId, latitude, longitude }, { onConflict: 'owner_id' })
+      .select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function clearHome(ownerId) {
+    const { error } = await client.from('user_home').delete().eq('owner_id', ownerId);
+    if (error) throw error;
+  }
+
   window.Mipas.data = {
     fetchLists, fetchPlaces, fetchListById, fetchPlacesByListId,
     createList, updateList, deleteList,
     createPlace, updatePlace, deletePlace,
+    fetchHome, saveHome, clearHome,
   };
 })();

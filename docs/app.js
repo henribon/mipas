@@ -16,6 +16,7 @@ function App() {
 
   const [lists, setLists] = useState([]);
   const [places, setPlaces] = useState([]);
+  const [home, setHome] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -31,6 +32,7 @@ function App() {
   const [newListOpen, setNewListOpen] = useState(false);
   const [creatingList, setCreatingList] = useState(false);
   const [pendingListPick, setPendingListPick] = useState(false);
+  const [homeOpen, setHomeOpen] = useState(false);
 
   const mapRef = useRef(null);
   const leafRef = useRef(null);
@@ -63,6 +65,11 @@ function App() {
       .catch(() => setLoadError('Não deu pra carregar os dados. Confira o config.js e as políticas do Supabase.'))
       .finally(() => setLoadingData(false));
   }, [authReady, session]);
+
+  useEffect(() => {
+    if (!canEdit) { setHome(null); return; }
+    data.fetchHome().then(setHome).catch(() => setHome(null));
+  }, [canEdit]);
 
   useEffect(() => {
     const m = window.Mipas.map.initMap(mapRef.current);
@@ -184,6 +191,36 @@ function App() {
     }
   };
 
+  const updateRank = async (placeId, rank) => {
+    try {
+      const updated = await data.updatePlace(placeId, { rank });
+      setPlaces(ps => ps.map(p => (p.id === placeId ? updated : p)));
+    } catch (e) {
+      alert('Não deu pra salvar o rank.');
+    }
+  };
+
+  const toggleRanking = async (list) => {
+    try {
+      const updated = await data.updateList(list.id, { ranking_enabled: !list.ranking_enabled });
+      setLists(ls => ls.map(l => (l.id === updated.id ? updated : l)));
+    } catch (e) {
+      alert('Não deu pra atualizar a lista.');
+    }
+  };
+
+  const saveHome = async ({ lat, lng }) => {
+    const saved = await data.saveHome(session.user.id, { latitude: lat, longitude: lng });
+    setHome(saved);
+    setHomeOpen(false);
+  };
+
+  const removeHome = async () => {
+    await data.clearHome(session.user.id);
+    setHome(null);
+    setHomeOpen(false);
+  };
+
   const handleAuthButtonClick = () => {
     if (canEdit) window.Mipas.auth.signOut();
     else setLoginOpen(true);
@@ -216,6 +253,16 @@ function App() {
           fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: canEdit ? C.coral : C.sub, cursor: 'pointer',
         }}>
           {canEdit ? 'Sair' : 'Entrar'}
+        </button>
+      )}
+
+      {canEdit && (
+        <button onClick={() => setHomeOpen(true)} title="Definir minha casa (usada pra ordenar por distância)" style={{
+          position: 'absolute', top: 16, right: 84, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
+          width: 34, height: 34, background: C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: home ? C.coral : C.sub, cursor: 'pointer', padding: 0,
+        }}>
+          <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 1.5L1.5 7v7.5h4.5v-4.5h4v4.5h4.5V7L8 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
         </button>
       )}
 
@@ -298,10 +345,13 @@ function App() {
         <ListDetail
           list={openList}
           places={places.filter(p => p.list_id === openList.id)}
+          home={home}
           onBack={() => setOpenListId(null)}
           onOpen={goToPlace}
           onRemove={removePlace}
           onShare={() => shareList(openList)}
+          onUpdateRank={updateRank}
+          onToggleRanking={() => toggleRanking(openList)}
           canEdit={canEdit}
         />
       )}
@@ -343,6 +393,15 @@ function App() {
       )}
 
       {loginOpen && <LoginForm onCancel={() => setLoginOpen(false)} />}
+
+      {homeOpen && (
+        <HomeSheet
+          home={home}
+          onCancel={() => setHomeOpen(false)}
+          onSave={saveHome}
+          onClear={removeHome}
+        />
+      )}
     </div>
   );
 }

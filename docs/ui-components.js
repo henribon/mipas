@@ -99,6 +99,94 @@ function NewListSheet({ onCancel, onCreate, creating }) {
   );
 }
 
+function HomeSheet({ home, onCancel, onSave, onClear }) {
+  const { useState, useMemo } = React;
+  const C = window.Mipas.theme;
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [error, setError] = useState('');
+
+  const debouncedSearch = useMemo(() => window.Mipas.debounce(async (q) => {
+    if (!q.trim()) { setResults([]); return; }
+    setSearching(true);
+    try {
+      setResults(await window.Mipas.geocodeAddress(q));
+    } catch (e) {
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, 600), []);
+
+  const pick = async (lat, lng) => {
+    setSaving(true);
+    setError('');
+    try {
+      await onSave({ lat, lng });
+    } catch (e) {
+      setError('Não deu pra salvar. Tenta de novo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) { setError('Este navegador não suporta geolocalização.'); return; }
+    setLocating(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      pos => { setLocating(false); pick(pos.coords.latitude, pos.coords.longitude); },
+      () => { setLocating(false); setError('Não deu pra pegar sua localização. Tenta buscar o endereço.'); },
+    );
+  };
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 900 }}>
+      <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
+      <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', maxHeight: '86%', overflow: 'auto', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
+        <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
+        <div style={{ fontFamily: 'Inter', fontSize: 19, fontWeight: 700, color: C.ink }}>Sua casa</div>
+        <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 3, lineHeight: 1.4 }}>
+          Usada só pra calcular distância nas suas listas. Nunca aparece pra quem visualiza uma lista pública.
+        </div>
+
+        {home && (
+          <div style={{ marginTop: 14, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 600, color: C.ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Casa definida ({home.latitude.toFixed(4)}, {home.longitude.toFixed(4)})</span>
+            <button onClick={onClear} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B' }}>Remover</button>
+          </div>
+        )}
+
+        <button onClick={useCurrentLocation} disabled={locating || saving} style={{
+          width: '100%', boxSizing: 'border-box', marginTop: 14, border: 'none', cursor: locating ? 'default' : 'pointer',
+          borderRadius: 12, padding: '13px 16px', fontFamily: 'Inter', fontSize: 14.5, fontWeight: 700,
+          background: C.coral, color: '#fff', opacity: locating || saving ? .6 : 1,
+        }}>{locating ? 'Localizando…' : 'Usar minha localização atual'}</button>
+
+        <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Ou busque um endereço</div>
+        <input autoFocus value={query} onChange={e => { setQuery(e.target.value); debouncedSearch(e.target.value); }} placeholder="Rua, praça, avenida…"
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+
+        {searching && <div style={{ textAlign: 'center', marginTop: 16, color: C.sub, fontWeight: 600, fontSize: 13 }}>Buscando…</div>}
+        {error && <div style={{ marginTop: 12, color: '#FF6B5B', fontWeight: 600, fontSize: 13 }}>{error}</div>}
+
+        <div style={{ marginTop: 8 }}>
+          {results.map((r, i) => (
+            <div key={i} onClick={() => pick(r.lat, r.lng)} style={{ padding: '12px 4px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: C.ink }}>
+              {r.address}
+            </div>
+          ))}
+        </div>
+
+        <Btn onClick={onCancel} style={{ width: '100%', boxSizing: 'border-box', marginTop: 18 }}>Fechar</Btn>
+      </div>
+    </div>
+  );
+}
+
 function PlaceCard({ place, list, onClose }) {
   const C = window.Mipas.theme;
   return (
@@ -117,8 +205,55 @@ function PlaceCard({ place, list, onClose }) {
   );
 }
 
-function ListDetail({ list, places, onBack, onOpen, onRemove, onShare, canEdit }) {
+function SortPill({ active, children, onClick }) {
   const C = window.Mipas.theme;
+  return (
+    <button onClick={onClick} style={{
+      border: `1.5px solid ${active ? C.coral : C.line}`, borderRadius: 999, padding: '6px 12px', cursor: 'pointer',
+      fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5,
+      background: active ? C.coral + '22' : C.surface, color: active ? C.coral : C.sub,
+    }}>{children}</button>
+  );
+}
+
+function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onUpdateRank, onToggleRanking, canEdit }) {
+  const { useState, useMemo } = React;
+  const C = window.Mipas.theme;
+  const [sortBy, setSortBy] = useState('padrao');
+  const [sortDir, setSortDir] = useState('asc');
+
+  const withDistance = useMemo(() => places.map(p => ({
+    ...p,
+    distanceKm: home ? window.Mipas.haversineKm(home.latitude, home.longitude, p.latitude, p.longitude) : null,
+  })), [places, home]);
+
+  const sortedPlaces = useMemo(() => {
+    if (sortBy === 'padrao') return withDistance;
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const sorted = [...withDistance];
+    if (sortBy === 'rank') {
+      sorted.sort((a, b) => {
+        if (a.rank == null && b.rank == null) return 0;
+        if (a.rank == null) return 1;
+        if (b.rank == null) return -1;
+        return (a.rank - b.rank) * dir;
+      });
+    } else if (sortBy === 'distancia') {
+      sorted.sort((a, b) => {
+        if (a.distanceKm == null && b.distanceKm == null) return 0;
+        if (a.distanceKm == null) return 1;
+        if (b.distanceKm == null) return -1;
+        return (a.distanceKm - b.distanceKm) * dir;
+      });
+    }
+    return sorted;
+  }, [withDistance, sortBy, sortDir]);
+
+  const clickSort = (key) => {
+    if (sortBy !== key) { setSortBy(key); setSortDir('asc'); return; }
+    setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+  };
+
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 650, background: C.paper, overflow: 'auto', padding: '62px 20px 120px' }}>
       <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Listas</button>
@@ -134,9 +269,33 @@ function ListDetail({ list, places, onBack, onOpen, onRemove, onShare, canEdit }
           </button>
         )}
       </div>
+
+      {canEdit && (
+        <button onClick={onToggleRanking} style={{ marginTop: 14, border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: 0 }}>
+          <div style={{ width: 34, height: 20, borderRadius: 999, background: list.ranking_enabled ? C.coral : C.line, position: 'relative', transition: 'background .15s' }}>
+            <div style={{ position: 'absolute', top: 2, left: list.ranking_enabled ? 16 : 2, width: 16, height: 16, borderRadius: 999, background: '#fff', transition: 'left .15s' }} />
+          </div>
+          <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.sub }}>Ranking nesta lista {list.ranking_enabled ? 'ativado' : 'desativado'}</span>
+        </button>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+        <SortPill active={sortBy === 'padrao'} onClick={() => clickSort('padrao')}>Padrão</SortPill>
+        {list.ranking_enabled && (
+          <SortPill active={sortBy === 'rank'} onClick={() => clickSort('rank')}>
+            Rank {sortBy === 'rank' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+          </SortPill>
+        )}
+        {home && (
+          <SortPill active={sortBy === 'distancia'} onClick={() => clickSort('distancia')}>
+            Distância {sortBy === 'distancia' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+          </SortPill>
+        )}
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
-        {places.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
-        {places.map(p => (
+        {sortedPlaces.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
+        {sortedPlaces.map(p => (
           <div key={p.id} onClick={() => onOpen(p)} style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden', cursor: 'pointer' }}>
             <div style={{ height: 64, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{list.emoji}</div>
             <div style={{ padding: '12px 14px 14px' }}>
@@ -146,6 +305,24 @@ function ListDetail({ list, places, onBack, onOpen, onRemove, onShare, canEdit }
               </div>
               <div style={{ color: C.sub, fontWeight: 500, fontSize: 12.5, marginTop: 3 }}>{p.address}</div>
               {p.note && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px' }}>{p.note}</div>}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                {p.distanceKm != null && (
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
+                    {p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`}
+                  </div>
+                )}
+                {list.ranking_enabled && canEdit && (
+                  <div onClick={ev => ev.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.sub }}>Rank</span>
+                    <input type="number" value={p.rank ?? ''} placeholder="—"
+                      onChange={e => onUpdateRank(p.id, e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                      style={{ width: 48, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 8, padding: '3px 6px', fontSize: 12.5, fontWeight: 700, color: C.ink, textAlign: 'center' }} />
+                  </div>
+                )}
+                {list.ranking_enabled && !canEdit && p.rank != null && (
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '4px 10px' }}>#{p.rank}</div>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -154,4 +331,4 @@ function ListDetail({ list, places, onBack, onOpen, onRemove, onShare, canEdit }
   );
 }
 
-Object.assign(window, { Btn, SaveSheet, NewListSheet, PlaceCard, ListDetail, gradientForPlace });
+Object.assign(window, { Btn, SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListDetail, gradientForPlace });
