@@ -31,7 +31,6 @@ create table public.places (
   address      text not null,
   latitude     double precision not null,
   longitude    double precision not null,
-  note         text,
   rank         integer,
   category     text,
   rating       numeric(3,1),
@@ -160,9 +159,9 @@ create policy "owner can delete own photos" on public.place_photos
 -- ---------------------------------------------------------
 -- Privacidade por COLUNA. RLS filtra linhas, não colunas: sem isto, quem
 -- abre uma lista pública lê todas as colunas dessas linhas — inclusive
--- "note", que na interface é a nota pessoal do dono. Em Postgres não dá pra
--- revogar uma coluna solta enquanto existe SELECT no nível da tabela: revoga
--- a tabela e reconcede só as colunas públicas.
+-- "owner_id", que a interface não usa. Em Postgres não dá pra revogar uma
+-- coluna solta enquanto existe SELECT no nível da tabela: revoga a tabela e
+-- reconcede só as colunas públicas.
 -- ---------------------------------------------------------
 
 revoke select on public.lists from anon;
@@ -388,3 +387,27 @@ create policy "owner can read own place photos" on storage.objects
 -- O PostgREST guarda as permissões em cache; sem isto as mudanças de grant
 -- acima podem demorar a valer na API REST.
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- Migração incremental (2026-07-29c) — uma descrição só.
+-- A interface tinha dois textos por lugar: "description" (pública) e "note"
+-- (privada). Passa a existir só a descrição; onde a descrição está vazia, o
+-- conteúdo da nota é movido pra lá, pra não perder o que já foi escrito.
+-- Idempotente: rodar de novo não duplica nada.
+-- ---------------------------------------------------------
+
+update public.places
+   set description = note
+ where note is not null
+   and btrim(note) <> ''
+   and (description is null or btrim(description) = '');
+
+-- Onde os DOIS tinham texto diferente, a nota é preservada no fim da
+-- descrição em vez de ser descartada.
+update public.places
+   set description = description || E'\n\n' || note
+ where note is not null
+   and btrim(note) <> ''
+   and description is not null
+   and btrim(description) <> ''
+   and position(note in description) = 0;

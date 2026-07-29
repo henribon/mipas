@@ -170,7 +170,6 @@ function App() {
         address: d.address,
         latitude: d.lat,
         longitude: d.lng,
-        note: d.note || null,
         category: d.category?.trim() || null,
         rating: d.rating === '' || d.rating == null ? null : parseFloat(d.rating),
         description: d.description?.trim() || null,
@@ -460,7 +459,7 @@ function App() {
               <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
             )}
             {results.map((r, i) => (
-              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', note: '', category: '', rating: '', description: '', avg_price: '', instagram: '', list_id: lists[0]?.id })}
+              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', list_id: lists[0]?.id })}
                 style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>

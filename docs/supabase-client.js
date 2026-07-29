@@ -6,8 +6,8 @@ window.Mipas = window.Mipas || {};
   window.Mipas.supabase = client;
 
   // Visitante anônimo não tem SELECT na tabela inteira (ver supabase-schema.sql):
-  // "note" e "owner_id" ficaram fora do que o banco concede pra ele. Por isso a
-  // leitura pública pede colunas explícitas — um select('*') aqui daria erro de
+  // "owner_id" ficou fora do que o banco concede pra ele. Por isso a leitura
+  // pública pede colunas explícitas — um select('*') aqui daria erro de
   // permissão, e é justamente essa a intenção.
   const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, ranking_enabled, created_at';
   const PHOTO_PUBLIC_COLS = 'id, place_id, storage_path, title, description, created_at';
@@ -63,9 +63,9 @@ window.Mipas = window.Mipas || {};
     if (error) throw error;
   }
 
-  async function createPlace({ name, address, latitude, longitude, note, category, rating, description, avg_price, instagram, list_id }) {
+  async function createPlace({ name, address, latitude, longitude, category, rating, description, avg_price, instagram, list_id }) {
     const { data, error } = await client.from('places')
-      .insert({ name, address, latitude, longitude, note, category, rating, description, avg_price, instagram, list_id })
+      .insert({ name, address, latitude, longitude, category, rating, description, avg_price, instagram, list_id })
       .select('*, place_photos(*)').single();
     if (error) throw error;
     return withPhotoUrls(data);

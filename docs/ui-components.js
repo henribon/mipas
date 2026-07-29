@@ -65,10 +65,7 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
         <input value={draft.instagram || ''} onChange={e => set('instagram', e.target.value)} placeholder="@dolugar"
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Descrição <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, visível pra quem ver a lista)</span></div>
-        <textarea value={draft.description || ''} onChange={e => set('description', e.target.value)} placeholder="Como é o lugar, o que pedir, vibe geral…" rows={2}
-          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
-        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Uma nota pra você do futuro <span style={{ color: C.sub, fontWeight: 500 }}>(só você vê, nem quem abrir o link)</span></div>
-        <textarea value={draft.note} onChange={e => set('note', e.target.value)} placeholder="Ex: pedir a mesa da janela…" rows={2}
+        <textarea value={draft.description || ''} onChange={e => set('description', e.target.value)} placeholder="Como é o lugar, o que pedir, vibe geral…" rows={3}
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
           <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
@@ -283,8 +280,7 @@ function PlaceCard({ place, list, onClose }) {
             </button>
           )}
         </div>
-        {place.description && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.description}</div>}
-        {place.note && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }}>{place.note}</div>}
+        {place.description && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{place.description}</div>}
       </div>
 
       {openId && <PhotoLightbox photos={photos} openId={openId} onSetId={setOpenId} onClose={() => setOpenId(null)} />}
@@ -669,9 +665,8 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
                   <InlineEdit value={p.description} placeholder="Descrição (visível pra quem vê a lista)" type="textarea" onCommit={v => onUpdateDescription(p.id, v)} />
                 </div>
               ) : p.description && (
-                <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px' }}>{p.description}</div>
+                <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px', whiteSpace: 'pre-wrap' }}>{p.description}</div>
               )}
-              {p.note && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px' }}>{p.note}</div>}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
                 {p.distanceKm != null && (
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
