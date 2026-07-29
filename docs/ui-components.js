@@ -277,7 +277,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
       {onBack && (
         <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Mapa</button>
       )}
-      <div style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink }}>Minhas listas</div>
+      <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink }}>Minhas listas</div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {lists.map(l => {
@@ -435,7 +435,7 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onU
       )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16 }}>
-        <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.sub }}>Ordenar por</span>
+        <span style={{ fontWeight: 700, fontSize: 13.5, color: C.sub }}>Ordenar por</span>
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
           border: `1.5px solid ${C.line}`, background: C.surface, borderRadius: 10, padding: '7px 10px',
           fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.ink, cursor: 'pointer',

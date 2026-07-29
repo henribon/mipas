@@ -33,7 +33,14 @@ function App() {
   const [creatingList, setCreatingList] = useState(false);
   const [pendingListPick, setPendingListPick] = useState(false);
   const [homeOpen, setHomeOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 900px)').matches);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
+  const [themeMode, setThemeMode] = useState(() => (document.body.classList.contains('light') ? 'light' : 'dark'));
+
+  const toggleTheme = () => {
+    const next = themeMode === 'dark' ? 'light' : 'dark';
+    window.Mipas.setTheme(next);
+    setThemeMode(next);
+  };
 
   const mapRef = useRef(null);
   const leafRef = useRef(null);
@@ -80,7 +87,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 900px)');
+    const mq = window.matchMedia('(min-width: 720px)');
     const onChange = (e) => setIsDesktop(e.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
@@ -306,7 +313,19 @@ function App() {
     <div style={{ position: 'fixed', inset: 0, background: C.paper, overflow: 'hidden', display: isDesktop ? 'flex' : 'block' }}>
     <div style={isDesktop ? { position: 'relative', flex: '1 1 auto', minWidth: 0, height: '100%' } : { position: 'absolute', inset: 0 }}>
       <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 110, background: 'linear-gradient(rgba(18,18,20,.9),rgba(18,18,20,0))', pointerEvents: 'none', zIndex: 400 }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 110, background: C.fade, pointerEvents: 'none', zIndex: 400 }} />
+
+      <button onClick={toggleTheme} title={themeMode === 'dark' ? 'Mudar pro tema claro' : 'Mudar pro tema escuro'} style={{
+        position: 'absolute', top: 16, left: 16, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
+        width: 34, height: 34, background: C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: C.sub, cursor: 'pointer', padding: 0,
+      }}>
+        {themeMode === 'dark' ? (
+          <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><line x1="8" y1="0.8" x2="8" y2="2.6" /><line x1="8" y1="13.4" x2="8" y2="15.2" /><line x1="0.8" y1="8" x2="2.6" y2="8" /><line x1="13.4" y1="8" x2="15.2" y2="8" /><line x1="2.9" y1="2.9" x2="4.2" y2="4.2" /><line x1="11.8" y1="11.8" x2="13.1" y2="13.1" /><line x1="2.9" y1="13.1" x2="4.2" y2="11.8" /><line x1="11.8" y1="4.2" x2="13.1" y2="2.9" /></g></svg>
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5 6 6 0 1 0 13.5 9.5Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+        )}
+      </button>
 
       {showLoading && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 1000, background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter', fontWeight: 600, color: C.sub }}>
@@ -417,7 +436,7 @@ function App() {
       )}
 
       {!isDesktop && !searchOpen && !draft && (
-        <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', zIndex: 700, display: 'flex', gap: 4, background: 'rgba(27,27,31,.9)', backdropFilter: 'blur(14px)', borderRadius: 999, padding: 5, border: `1.5px solid ${C.line}` }}>
+        <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', zIndex: 700, display: 'flex', gap: 4, background: C.glass, backdropFilter: 'blur(14px)', borderRadius: 999, padding: 5, border: `1.5px solid ${C.line}` }}>
           {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => (
             <button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} style={{
               border: 'none', cursor: 'pointer', borderRadius: 999, padding: '10px 26px',
