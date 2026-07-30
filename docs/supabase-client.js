@@ -1,4 +1,3 @@
-// Camada de acesso a dados: isola as chamadas ao Supabase do resto do app.
 window.Mipas = window.Mipas || {};
 
 (function () {
@@ -67,8 +66,6 @@ window.Mipas = window.Mipas || {};
     return withPhotoUrls(data);
   }
 
-  // Traz as fotos junto: sem isso, salvar qualquer campo devolvia o lugar sem
-  // place_photos e a interface apagava as fotos do card até recarregar.
   async function updatePlace(id, patch) {
     const { data, error } = await client.from('places').update(patch).eq('id', id)
       .select('*, place_photos(*)').single();
@@ -81,23 +78,16 @@ window.Mipas = window.Mipas || {};
     if (error) throw error;
   }
 
-  // O bucket é privado, então a imagem é servida por URL assinada temporária.
-  // Quem pode assinar é decidido pelas policies do storage (dono, ou qualquer
-  // um se a foto pertence a uma lista pública) — não pelo sigilo do caminho.
   const SIGNED_URL_TTL = 60 * 60 * 8;
 
   async function signedUrlMap(paths) {
     if (paths.length === 0) return {};
     const { data, error } = await client.storage.from('place-photos').createSignedUrls(paths, SIGNED_URL_TTL);
     if (error) {
-      // Sem isto a imagem some da tela sem nenhum aviso — o <img> fica com
-      // src vazio e não há erro visível em lugar nenhum.
       console.error('[Mipas] não deu pra assinar URLs de foto:', error);
       return {};
     }
     const map = {};
-    // Versões do supabase-js divergem entre "signedUrl" e "signedURL" nesta
-    // resposta; aceitar os dois evita quebrar quando o CDN sobe de versão.
     data.forEach(d => {
       const url = d.signedUrl || d.signedURL;
       if (url) map[d.path] = url;
@@ -105,8 +95,6 @@ window.Mipas = window.Mipas || {};
     return map;
   }
 
-  // Ordem definida pelo dono (position). Fotos sem posição — enviadas antes
-  // da feature existir — vão pro fim, na ordem de envio.
   function byPosition(a, b) {
     const pa = a.position == null ? Infinity : a.position;
     const pb = b.position == null ? Infinity : b.position;
@@ -136,10 +124,38 @@ window.Mipas = window.Mipas || {};
     return (await signedUrlMap([path]))[path] || null;
   }
 
+  const MAX_LADO = 1600;
+  const JPEG_QUALIDADE = 0.82;
+
+  async function comprimirImagem(file) {
+    if (!file.type || !file.type.startsWith('image/') || /svg|gif/.test(file.type)) return file;
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) {
+      try { bitmap = await createImageBitmap(file); } catch (e2) { return file; }
+    }
+    const escala = Math.min(1, MAX_LADO / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * escala));
+    const h = Math.max(1, Math.round(bitmap.height * escala));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', JPEG_QUALIDADE));
+    if (!blob || blob.size >= file.size) return file;
+    return blob;
+  }
+
   async function uploadPhoto(ownerId, placeId, file, title) {
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const enviar = await comprimirImagem(file);
+    const ext = enviar.type === 'image/jpeg' ? 'jpg' : ((file.name || '').split('.').pop() || 'jpg').toLowerCase();
     const path = `${ownerId}/${placeId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error: uploadError } = await client.storage.from('place-photos').upload(path, file);
+    const { error: uploadError } = await client.storage.from('place-photos').upload(path, enviar, { contentType: enviar.type || file.type });
     if (uploadError) throw uploadError;
     const { data, error } = await client.from('place_photos')
       .insert({ place_id: placeId, storage_path: path, title: title || null })
@@ -148,7 +164,6 @@ window.Mipas = window.Mipas || {};
     return { ...data, url: await photoUrl(data.storage_path) };
   }
 
-  // Grava a ordem inteira de uma vez: cada foto recebe sua posição nova.
   async function reorderPhotos(ids) {
     const results = await Promise.all(ids.map((id, i) =>
       client.from('place_photos').update({ position: i }).eq('id', id).select().single()));
