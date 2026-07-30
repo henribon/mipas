@@ -1,12 +1,9 @@
-// Wrapper fino sobre o Leaflet: inicialização do mapa e sincronização dos marcadores.
 window.Mipas = window.Mipas || {};
 
 (function () {
   function buildMarkerIcon(list) {
     const color = list ? list.color : '#FF5C38';
     const emoji = list ? list.emoji : '📍';
-    // Badge circular moderno (círculo + ponta indicando o ponto exato), em vez
-    // do teardrop fino de antes.
     return L.divIcon({
       className: '', iconSize: [36, 46], iconAnchor: [18, 44],
       html: `<div class="pin-anim" style="width:36px;height:46px;position:relative;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))">
@@ -22,10 +19,6 @@ window.Mipas = window.Mipas || {};
   function initMap(container) {
     const map = L.map(container, { zoomControl: false, attributionControl: true });
     map.setView([-23.561, -46.656], 12);
-    // Tiles claros do CartoDB Positron (gratuitos, sem chave de API, ótimo
-    // contraste nas vias) invertidos via CSS (.leaflet-tile-pane no styles.css)
-    // pra virar um azul-marinho escuro, parecido com o Google Maps dark mode,
-    // sem depender de nenhum provedor de tiles escuros/pago.
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '© OpenStreetMap contributors © CARTO',
       subdomains: 'abcd',

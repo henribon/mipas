@@ -1,5 +1,3 @@
-// Autenticação: só o dono loga (email/senha). Não existe cadastro público — o usuário
-// dono é criado manualmente no dashboard do Supabase (Authentication → Users → Add user).
 window.Mipas = window.Mipas || {};
 
 window.Mipas.auth = {

@@ -17,13 +17,11 @@
 <body>
 <div id="root"></div>
 
-<!-- Módulos "plain JS" (sem JSX) primeiro, em ordem: cada um preenche window.Mipas.* -->
 <script src="config.js"></script>
 <script src="supabase-client.js"></script>
 <script src="geocoding.js"></script>
 <script src="map.js"></script>
 
-<!-- Módulos com JSX, processados pelo Babel Standalone (via XHR síncrono, preserva a ordem) -->
 <script type="text/babel" src="auth.js"></script>
 <script type="text/babel" src="ui-components.js"></script>
 <script type="text/babel" src="app.js"></script>

@@ -59,6 +59,7 @@ create table public.place_photos (
   storage_path  text not null,
   title         text,
   description   text,
+  position      integer,
   created_at    timestamptz not null default now()
 );
 
@@ -174,7 +175,7 @@ grant select (id, list_id, name, address, latitude, longitude,
   on public.places to anon;
 
 revoke select on public.place_photos from anon;
-grant select (id, place_id, storage_path, title, description, created_at)
+grant select (id, place_id, storage_path, title, description, position, created_at)
   on public.place_photos to anon;
 
 -- ---------------------------------------------------------
@@ -359,7 +360,7 @@ grant select (id, list_id, name, address, latitude, longitude,
   on public.places to anon;
 
 revoke select on public.place_photos from anon;
-grant select (id, place_id, storage_path, title, description, created_at)
+grant select (id, place_id, storage_path, title, description, position, created_at)
   on public.place_photos to anon;
 
 update storage.buckets set public = false where id = 'place-photos';
@@ -411,3 +412,28 @@ update public.places
    and description is not null
    and btrim(description) <> ''
    and position(note in description) = 0;
+
+-- ---------------------------------------------------------
+-- Migração incremental (2026-07-29d) — ordem das fotos.
+-- O dono passa a poder arrastar as fotos pra definir a ordem; sem uma coluna
+-- pra guardar isso, a ordem se perderia no próximo carregamento.
+-- Idempotente.
+-- ---------------------------------------------------------
+
+alter table public.place_photos add column if not exists position integer;
+
+-- Sem posição definida, as já existentes seguem a ordem de envio.
+update public.place_photos ph
+   set position = sub.n
+  from (
+    select id, (row_number() over (partition by place_id order by created_at) - 1) as n
+      from public.place_photos
+  ) sub
+ where sub.id = ph.id
+   and ph.position is null;
+
+-- A leitura pública é por coluna (ver acima): sem reconceder, a posição
+-- ficaria invisível pra quem abre a lista pelo link e a ordem não valeria.
+grant select (position) on public.place_photos to anon;
+
+notify pgrst, 'reload schema';

@@ -1,7 +1,3 @@
-// Busca de endereço via Nominatim (OpenStreetMap) — API pública, gratuita, sem chave.
-// Navegadores não permitem customizar o header User-Agent em fetch(); a política de uso
-// do Nominatim aceita a identificação via Referer (origem do site) para uso de baixo volume,
-// que é o nosso caso. Manter o debounce para respeitar o rate limit informal (~1 req/s).
 window.Mipas = window.Mipas || {};
 
 (function () {
@@ -21,7 +17,6 @@ window.Mipas = window.Mipas || {};
     };
   }
 
-  // Distância em linha reta (km) entre dois pontos — fórmula de Haversine.
   function haversineKm(lat1, lng1, lat2, lng2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -31,10 +26,6 @@ window.Mipas = window.Mipas || {};
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // Nominatim devolve "1533, Rua Bela Cintra, Cerqueira César, Jardim Paulista,
-  // São Paulo, Região Sudeste, 01415-007, Brasil" — pra exibição queremos só
-  // "Rua Bela Cintra, 1533 – Cerqueira César". O endereço completo continua
-  // guardado no banco; isso aqui é só formatação de tela.
   function shortAddress(full) {
     const parts = String(full).split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length < 2) return full;

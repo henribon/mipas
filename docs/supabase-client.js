@@ -1,16 +1,11 @@
-// Camada de acesso a dados: isola as chamadas ao Supabase do resto do app.
 window.Mipas = window.Mipas || {};
 
 (function () {
   const client = supabase.createClient(window.Mipas.config.supabaseUrl, window.Mipas.config.supabaseAnonKey);
   window.Mipas.supabase = client;
 
-  // Visitante anônimo não tem SELECT na tabela inteira (ver supabase-schema.sql):
-  // "owner_id" ficou fora do que o banco concede pra ele. Por isso a leitura
-  // pública pede colunas explícitas — um select('*') aqui daria erro de
-  // permissão, e é justamente essa a intenção.
   const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, ranking_enabled, created_at';
-  const PHOTO_PUBLIC_COLS = 'id, place_id, storage_path, title, description, created_at';
+  const PHOTO_PUBLIC_COLS = 'id, place_id, storage_path, title, description, position, created_at';
   const PLACE_PUBLIC_COLS = 'id, list_id, name, address, latitude, longitude, rank, category, '
     + `rating, description, avg_price, instagram, created_at, place_photos(${PHOTO_PUBLIC_COLS})`;
 
@@ -71,8 +66,6 @@ window.Mipas = window.Mipas || {};
     return withPhotoUrls(data);
   }
 
-  // Traz as fotos junto: sem isso, salvar qualquer campo devolvia o lugar sem
-  // place_photos e a interface apagava as fotos do card até recarregar.
   async function updatePlace(id, patch) {
     const { data, error } = await client.from('places').update(patch).eq('id', id)
       .select('*, place_photos(*)').single();
@@ -85,23 +78,16 @@ window.Mipas = window.Mipas || {};
     if (error) throw error;
   }
 
-  // O bucket é privado, então a imagem é servida por URL assinada temporária.
-  // Quem pode assinar é decidido pelas policies do storage (dono, ou qualquer
-  // um se a foto pertence a uma lista pública) — não pelo sigilo do caminho.
   const SIGNED_URL_TTL = 60 * 60 * 8;
 
   async function signedUrlMap(paths) {
     if (paths.length === 0) return {};
     const { data, error } = await client.storage.from('place-photos').createSignedUrls(paths, SIGNED_URL_TTL);
     if (error) {
-      // Sem isto a imagem some da tela sem nenhum aviso — o <img> fica com
-      // src vazio e não há erro visível em lugar nenhum.
       console.error('[Mipas] não deu pra assinar URLs de foto:', error);
       return {};
     }
     const map = {};
-    // Versões do supabase-js divergem entre "signedUrl" e "signedURL" nesta
-    // resposta; aceitar os dois evita quebrar quando o CDN sobe de versão.
     data.forEach(d => {
       const url = d.signedUrl || d.signedURL;
       if (url) map[d.path] = url;
@@ -109,12 +95,21 @@ window.Mipas = window.Mipas || {};
     return map;
   }
 
+  function byPosition(a, b) {
+    const pa = a.position == null ? Infinity : a.position;
+    const pb = b.position == null ? Infinity : b.position;
+    if (pa !== pb) return pa - pb;
+    return String(a.created_at).localeCompare(String(b.created_at));
+  }
+
   async function attachPhotoUrls(places) {
     const paths = [];
     places.forEach(p => (p.place_photos || []).forEach(ph => paths.push(ph.storage_path)));
     const urls = await signedUrlMap(paths);
     return places.map(p => {
-      const photos = (p.place_photos || []).map(ph => ({ ...ph, url: urls[ph.storage_path] || null }));
+      const photos = (p.place_photos || [])
+        .map(ph => ({ ...ph, url: urls[ph.storage_path] || null }))
+        .sort(byPosition);
       const { place_photos, ...rest } = p;
       return { ...rest, photos };
     });
@@ -139,6 +134,14 @@ window.Mipas = window.Mipas || {};
       .select().single();
     if (error) throw error;
     return { ...data, url: await photoUrl(data.storage_path) };
+  }
+
+  async function reorderPhotos(ids) {
+    const results = await Promise.all(ids.map((id, i) =>
+      client.from('place_photos').update({ position: i }).eq('id', id).select().single()));
+    const erro = results.find(r => r.error);
+    if (erro) throw erro.error;
+    return results.map(r => r.data);
   }
 
   async function updatePhoto(id, patch) {
@@ -177,6 +180,6 @@ window.Mipas = window.Mipas || {};
     createList, updateList, deleteList,
     createPlace, updatePlace, deletePlace,
     fetchHome, saveHome, clearHome,
-    uploadPhoto, updatePhoto, deletePhoto,
+    uploadPhoto, updatePhoto, deletePhoto, reorderPhotos,
   };
 })();

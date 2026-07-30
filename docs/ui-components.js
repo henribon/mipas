@@ -1,12 +1,178 @@
-// Componentes visuais do Mipas: minimalista, escuro, uma única fonte (Inter),
-// sem emojis decorativos no texto. O emoji da lista é uma exceção — é dado
-// pelo próprio usuário (via input de texto, aceita qualquer emoji do teclado
-// do sistema) e funciona como ícone funcional da lista/pin no mapa.
 window.Mipas = window.Mipas || {};
+
+window.Mipas.computeRanks = function (places) {
+  const comNota = (places || []).filter(p => p.rating != null)
+    .sort((a, b) => (b.rating - a.rating) || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+  const ranks = {};
+  let posicao = 0;
+  let notaAnterior = null;
+  comNota.forEach((p, i) => {
+    if (notaAnterior === null || Number(p.rating) !== Number(notaAnterior)) {
+      posicao = i + 1;
+      notaAnterior = p.rating;
+    }
+    ranks[p.id] = posicao;
+  });
+  return ranks;
+};
 
 function gradientForPlace(place, list) {
   const color = list ? list.color : '#FF5C38';
   return `linear-gradient(135deg, ${color}33, ${color}0D)`;
+}
+
+const RICH_ALLOWED = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, BR: 1, DIV: 1, P: 1, SPAN: 1, FONT: 1 };
+const RICH_DROP = { SCRIPT: 1, STYLE: 1, IFRAME: 1, OBJECT: 1, EMBED: 1, TEMPLATE: 1, NOSCRIPT: 1 };
+const RICH_FONT_SIZE = { 1: '12px', 2: '13px', 3: '14px', 4: '15px', 5: '17px', 6: '19px', 7: '20px' };
+const RICH_MAX_PX = 20;
+const RICH_SIZES = [12, 13, 14, 15, 16, 17, 18, 19, 20];
+const RICH_FONTS = [
+  { nome: 'Padrão', css: 'Inter, sans-serif' },
+  { nome: 'Serifa', css: 'Georgia, serif' },
+  { nome: 'Monoespaçada', css: '"Courier New", monospace' },
+  { nome: 'Manuscrita', css: '"Comic Sans MS", cursive' },
+];
+const normalizaFonte = (v) => String(v || '').replace(/["']/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+window.Mipas.sanitizeRichHtml = function (html) {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString('<div id="raiz"></div>', 'text/html');
+  const root = doc.getElementById('raiz');
+  root.innerHTML = html;
+
+  const limpa = (pai) => {
+    Array.from(pai.childNodes).forEach(no => {
+      if (no.nodeType === 3) return;
+      if (no.nodeType !== 1) { no.remove(); return; }
+
+      if (RICH_DROP[no.tagName]) { no.remove(); return; }
+      if (!RICH_ALLOWED[no.tagName]) {
+        while (no.firstChild) pai.insertBefore(no.firstChild, no);
+        no.remove();
+        return;
+      }
+
+      let el = no;
+      if (no.tagName === 'FONT') {
+        const css = RICH_FONT_SIZE[no.getAttribute('size')];
+        const span = doc.createElement('span');
+        while (no.firstChild) span.appendChild(no.firstChild);
+        no.replaceWith(span);
+        el = span;
+        if (css) el.setAttribute('data-size', css);
+      }
+
+      let tamanho = '';
+      let fonte = '';
+      if (el.tagName === 'SPAN') {
+        tamanho = el.getAttribute('data-size') || (el.style && el.style.fontSize) || '';
+        fonte = (el.style && el.style.fontFamily) || '';
+      }
+      Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
+
+      const px = /^(\d+(?:\.\d+)?)px$/.exec(tamanho);
+      if (px) el.style.fontSize = Math.min(parseFloat(px[1]), RICH_MAX_PX) + 'px';
+      else if (/^[0-9.]+em$/.test(tamanho)) el.style.fontSize = tamanho;
+
+      const permitida = RICH_FONTS.find(f => normalizaFonte(f.css) === normalizaFonte(fonte));
+      if (permitida) el.style.fontFamily = permitida.css;
+
+      limpa(el);
+    });
+  };
+  limpa(root);
+  return root.innerHTML;
+};
+
+function RichText({ html, style }) {
+  const temTag = /<[a-z][\s\S]*>/i.test(html || '');
+  if (!temTag) return <div style={{ whiteSpace: 'pre-wrap', ...style }}>{html}</div>;
+  return <div style={style} dangerouslySetInnerHTML={{ __html: window.Mipas.sanitizeRichHtml(html) }} />;
+}
+
+function RichTextEditor({ value, onChange, placeholder, minHeight }) {
+  const { useRef, useEffect } = React;
+  const C = window.Mipas.theme;
+  const ref = useRef(null);
+  const [vazio, setVazio] = React.useState(!value);
+
+  useEffect(() => { if (ref.current) ref.current.innerHTML = value || ''; }, []);
+
+  const cmd = (comando, arg) => {
+    document.execCommand(comando, false, arg);
+    if (ref.current) { ref.current.focus(); emitir(); }
+  };
+
+  const aplicarEstilo = (prop, valor) => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!ref.current || !ref.current.contains(range.commonAncestorContainer)) return;
+    const span = document.createElement('span');
+    span.style[prop] = valor;
+    try {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      const novo = document.createRange();
+      novo.selectNodeContents(span);
+      sel.removeAllRanges();
+      sel.addRange(novo);
+    } catch (e) {
+      return;
+    }
+    emitir();
+  };
+  const emitir = () => {
+    if (!ref.current) return;
+    const html = ref.current.innerHTML;
+    setVazio(!ref.current.textContent.trim() && !/<img/i.test(html));
+    onChange(window.Mipas.sanitizeRichHtml(html));
+  };
+
+  const botao = (rotulo, aoClicar, estilo) => (
+    <button type="button" onMouseDown={ev => ev.preventDefault()} onClick={aoClicar} style={{
+      border: `1px solid ${C.line}`, background: C.cream, color: C.ink, borderRadius: 8,
+      minWidth: 30, height: 28, cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, padding: '0 8px', ...estilo,
+    }}>{rotulo}</button>
+  );
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+        {botao('B', () => cmd('bold'), { fontWeight: 800 })}
+        {botao('I', () => cmd('italic'), { fontStyle: 'italic', fontFamily: 'Georgia, serif' })}
+        {botao('U', () => cmd('underline'), { textDecoration: 'underline' })}
+        <select onMouseDown={ev => ev.stopPropagation()} value=""
+          onChange={ev => { const v = ev.target.value; ev.target.value = ''; if (v) aplicarEstilo('fontSize', v + 'px'); }}
+          title={`Tamanho do texto (máximo ${RICH_MAX_PX}px)`}
+          style={{ border: `1px solid ${C.line}`, background: C.cream, color: C.sub, borderRadius: 8, height: 28, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <option value="">Tamanho</option>
+          {RICH_SIZES.map(s => <option key={s} value={s}>{s} px</option>)}
+        </select>
+        <select onMouseDown={ev => ev.stopPropagation()} value=""
+          onChange={ev => { const v = ev.target.value; ev.target.value = ''; if (v) aplicarEstilo('fontFamily', v); }}
+          title="Fonte"
+          style={{ border: `1px solid ${C.line}`, background: C.cream, color: C.sub, borderRadius: 8, height: 28, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <option value="">Fonte</option>
+          {RICH_FONTS.map(f => <option key={f.nome} value={f.css}>{f.nome}</option>)}
+        </select>
+      </div>
+      <div style={{ position: 'relative' }}>
+        <div ref={ref} contentEditable suppressContentEditableWarning
+          onInput={emitir} onBlur={emitir}
+          style={{
+            width: '100%', boxSizing: 'border-box', background: C.surface, border: `1.5px solid ${C.line}`,
+            borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink,
+            minHeight: minHeight || 76, outline: 'none', lineHeight: 1.5, overflowWrap: 'anywhere',
+          }} />
+        {vazio && (
+          <div style={{ position: 'absolute', top: 12, left: 16, color: C.sub, fontSize: 14, fontWeight: 500, pointerEvents: 'none' }}>
+            {placeholder}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Btn({ children, onClick, primary, style, disabled }) {
@@ -18,6 +184,45 @@ function Btn({ children, onClick, primary, style, disabled }) {
       background: primary ? C.coral : C.cream, color: primary ? '#fff' : C.ink,
       opacity: disabled ? .5 : 1, ...style,
     }}>{children}</button>
+  );
+}
+
+function DraftPhotos({ photos, onChange }) {
+  const { useRef } = React;
+  const C = window.Mipas.theme;
+  const inputRef = useRef(null);
+
+  const escolher = (ev) => {
+    const arquivos = Array.from(ev.target.files || []);
+    if (arquivos.length) {
+      onChange([...photos, ...arquivos.map(file => ({ file, preview: URL.createObjectURL(file), title: '' }))]);
+    }
+    ev.target.value = '';
+  };
+  const remover = (i) => {
+    URL.revokeObjectURL(photos[i].preview);
+    onChange(photos.filter((_, idx) => idx !== i));
+  };
+  const renomear = (i, title) => onChange(photos.map((p, idx) => (idx === i ? { ...p, title } : p)));
+
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 7, alignItems: 'flex-start' }}>
+      {photos.map((p, i) => (
+        <div key={i} style={{ width: 96, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ position: 'relative', height: 72, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.line}` }}>
+            <img src={p.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <button type="button" onClick={() => remover(i)} style={{ position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, cursor: 'pointer', lineHeight: '20px', padding: 0 }}>✕</button>
+          </div>
+          <input value={p.title} onChange={e => renomear(i, e.target.value)} placeholder="Título"
+            style={{ width: '100%', boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`, borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, color: C.ink }} />
+        </div>
+      ))}
+      <button type="button" onClick={() => inputRef.current.click()} style={{
+        width: 96, height: 72, borderRadius: 10, border: `1.5px dashed ${C.coral}66`,
+        background: 'none', color: C.coral, fontSize: 22, fontWeight: 700, cursor: 'pointer',
+      }}>+</button>
+      <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={escolher} />
+    </div>
   );
 }
 
@@ -36,15 +241,18 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
         <input autoFocus value={draft.name} onChange={e => set('name', e.target.value)} placeholder='Ex: "Melhor pastel da cidade"'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Em qual lista?</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          {lists.map(l => (
-            <button key={l.id} onClick={() => set('list_id', l.id)} style={{
-              border: `1.5px solid ${draft.list_id === l.id ? l.color : C.line}`, borderRadius: 999, padding: '8px 13px', cursor: 'pointer',
-              fontFamily: 'Inter', fontWeight: 700, fontSize: 13, display: 'flex', gap: 6, alignItems: 'center',
-              background: draft.list_id === l.id ? l.color + '22' : C.surface, color: draft.list_id === l.id ? l.color : C.sub,
-            }}>{l.emoji} {l.name}</button>
-          ))}
-          <button onClick={onNewList} style={{ border: `1.5px dashed ${C.coral}88`, borderRadius: 999, padding: '8px 13px', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 13, background: 'none', color: C.coral }}>+ Nova</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          <select value={draft.list_id || ''} onChange={e => set('list_id', e.target.value)} style={{
+            flex: 1, minWidth: 0, boxSizing: 'border-box', background: C.surface, border: `1.5px solid ${C.line}`,
+            borderRadius: 12, padding: '13px 14px', fontSize: 15, fontWeight: 600, color: C.ink, cursor: 'pointer',
+          }}>
+            {!draft.list_id && <option value="">Escolha uma lista…</option>}
+            {lists.map(l => <option key={l.id} value={l.id}>{l.emoji} {l.name}</option>)}
+          </select>
+          <button onClick={onNewList} title="Criar uma lista nova" style={{
+            border: `1.5px dashed ${C.coral}88`, borderRadius: 12, padding: '13px 14px', cursor: 'pointer',
+            fontFamily: 'Inter', fontWeight: 700, fontSize: 13.5, background: 'none', color: C.coral, flexShrink: 0, whiteSpace: 'nowrap',
+          }}>+ Nova</button>
         </div>
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Categoria <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, você escolhe o nome)</span></div>
         <input value={draft.category || ''} onChange={e => set('category', e.target.value)} placeholder='Ex: "Bar", "Pizzaria", "Mirante"…'
@@ -65,8 +273,12 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
         <input value={draft.instagram || ''} onChange={e => set('instagram', e.target.value)} placeholder="@dolugar"
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Descrição <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, visível pra quem ver a lista)</span></div>
-        <textarea value={draft.description || ''} onChange={e => set('description', e.target.value)} placeholder="Como é o lugar, o que pedir, vibe geral…" rows={3}
-          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
+        <div style={{ marginTop: 7 }}>
+          <RichTextEditor value={draft.description} onChange={v => set('description', v)} placeholder="Como é o lugar, o que pedir, vibe geral…" />
+        </div>
+
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Fotos <span style={{ color: C.sub, fontWeight: 500 }}>(opcional)</span></div>
+        <DraftPhotos photos={draft.photos || []} onChange={v => set('photos', v)} />
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
           <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
           <Btn primary disabled={!canSave} onClick={onSave} style={{ flex: 2 }}>{saving ? 'Guardando…' : 'Guardar lugar'}</Btn>
@@ -205,9 +417,6 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
   );
 }
 
-// Endereço curto e clicável. A busca vai como texto (nome + endereço) pro
-// Google casar com a ficha do estabelecimento — com lat/lng ele abriria só um
-// pin solto na coordenada, sem foto/avaliações/horário.
 function AddressLink({ place, fontSize }) {
   const C = window.Mipas.theme;
   const query = encodeURIComponent(`${place.name}, ${place.address}`);
@@ -223,7 +432,6 @@ function AddressLink({ place, fontSize }) {
   );
 }
 
-// Botão "INSTAGRAM" com o logo — aceita "@handle", "handle" ou URL completa.
 function InstagramButton({ handle }) {
   const url = /^https?:\/\//i.test(handle) ? handle : 'https://instagram.com/' + handle.replace(/^@/, '');
   return (
@@ -281,7 +489,7 @@ function PlaceCard({ place, list, onClose }) {
             </button>
           )}
         </div>
-        {place.description && <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{place.description}</div>}
+        {place.description && <RichText html={place.description} style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }} />}
       </div>
 
       {openId && <PhotoLightbox photos={photos} openId={openId} onSetId={setOpenId} onClose={() => setOpenId(null)} />}
@@ -329,22 +537,20 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
   );
 }
 
-// Galeria do lugar: não há foto de capa. Dentro do bloco as fotos aparecem
-// como miniaturas enfileiradas, pra não inchar o card; clicar abre a foto
-// grande no visualizador. Fotos com o mesmo título (ex: "Macarronada") formam
-// um grupo com legenda própria; a descrição é do grupo (gravada em todas as
-// fotos dele). Fotos sem título ficam soltas no fim.
-function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove }) {
-  const { useRef, useState } = React;
+function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReorder }) {
+  const { useRef, useState, useEffect } = React;
   const C = window.Mipas.theme;
   const inputRef = useRef(null);
   const pendingTitleRef = useRef(null);
   const [openId, setOpenId] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
+  const dragRef = useRef({ id: null, timer: null, ativo: false });
+
+  useEffect(() => () => clearTimeout(dragRef.current.timer), []);
+
   if (!canEdit && (!photos || photos.length === 0)) return null;
 
-  // Valor em edição (rascunho) ou o que está salvo. O agrupamento continua
-  // usando o título SALVO: se reagrupasse a cada tecla, o campo saltaria de
-  // grupo no meio da digitação.
   const val = (ph, campo) => {
     const e = (edits || {})[ph.id] || {};
     return campo in e ? e[campo] : (ph[campo] ?? '');
@@ -363,18 +569,70 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove }) {
   all.forEach(ph => { const t = (ph.title || '').trim(); if (t && !titles.includes(t)) titles.push(t); });
   const groups = titles.map(t => ({ title: t, items: all.filter(ph => (ph.title || '').trim() === t) }));
   const untitled = all.filter(ph => !(ph.title || '').trim());
-  // Ordem que o visualizador percorre com as setas — a mesma que está na tela.
   const ordered = [...groups.flatMap(g => g.items), ...untitled];
 
-  // Miniatura: mantém o bloco do lugar compacto. A foto grande só aparece no
-  // visualizador, ao clicar.
+  const LONG_PRESS = 280;
+
+  const comecarArrasto = (id) => { dragRef.current.ativo = true; setDragId(id); };
+
+  const aoApontar = (ev, ph) => {
+    if (!canEdit || ordered.length < 2) return;
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    dragRef.current.id = ph.id;
+    dragRef.current.ativo = false;
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    if (ev.pointerType === 'mouse') comecarArrasto(ph.id);
+    else dragRef.current.timer = setTimeout(() => comecarArrasto(ph.id), LONG_PRESS);
+  };
+
+  const aoMover = (ev) => {
+    if (!dragRef.current.ativo) return;
+    ev.preventDefault();
+    const alvo = document.elementFromPoint(ev.clientX, ev.clientY);
+    const cartao = alvo && alvo.closest ? alvo.closest('[data-foto-id]') : null;
+    const id = cartao && cartao.getAttribute('data-foto-id');
+    if (id && id !== dragRef.current.id) setOverId(id);
+  };
+
+  const aoSoltar = () => {
+    clearTimeout(dragRef.current.timer);
+    const arrastado = dragRef.current.id;
+    const sobre = overId;
+    const eraArrasto = dragRef.current.ativo;
+    dragRef.current = { id: null, timer: null, ativo: false };
+    setDragId(null);
+    setOverId(null);
+    if (!eraArrasto || !arrastado || !sobre || arrastado === sobre) return;
+    const ids = ordered.map(p => p.id);
+    const de = ids.indexOf(arrastado);
+    const para = ids.indexOf(sobre);
+    if (de < 0 || para < 0) return;
+    ids.splice(para, 0, ids.splice(de, 1)[0]);
+    onReorder(ids);
+  };
+
   const thumb = (ph) => (
-    <div key={ph.id} style={{ position: 'relative', flexShrink: 0 }}>
-      <img src={ph.url} alt={ph.title || ''} loading="lazy" onClick={() => setOpenId(ph.id)}
-        title="Ver foto"
-        style={{ width: 72, height: 72, objectFit: 'cover', display: 'block', borderRadius: 10, border: `1px solid ${C.line}`, background: C.cream, cursor: 'zoom-in' }} />
+    <div key={ph.id} data-foto-id={ph.id}
+      onPointerDown={ev => aoApontar(ev, ph)}
+      onPointerMove={aoMover}
+      onPointerUp={aoSoltar}
+      onPointerCancel={aoSoltar}
+      style={{
+        position: 'relative', flexShrink: 0, touchAction: canEdit ? 'none' : 'auto',
+        opacity: dragId === ph.id ? .4 : 1,
+        transform: overId === ph.id ? 'scale(1.06)' : 'none',
+        transition: 'transform .12s',
+      }}>
+      <img src={ph.url} alt={ph.title || ''} loading="lazy" draggable={false}
+        onClick={() => { if (!dragRef.current.ativo) setOpenId(ph.id); }}
+        title={canEdit && ordered.length > 1 ? 'Clique pra ver, arraste pra reordenar' : 'Ver foto'}
+        style={{
+          width: 72, height: 72, objectFit: 'cover', display: 'block', borderRadius: 10,
+          border: `${overId === ph.id ? 2 : 1}px solid ${overId === ph.id ? C.coral : C.line}`,
+          background: C.cream, cursor: canEdit && ordered.length > 1 ? 'grab' : 'zoom-in',
+        }} />
       {canEdit && (
-        <button onClick={() => onRemove(ph)} style={{ position: 'absolute', top: 3, right: 3, width: 19, height: 19, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '19px', padding: 0 }}>✕</button>
+        <button onClick={() => onRemove(ph)} onPointerDown={ev => ev.stopPropagation()} style={{ position: 'absolute', top: 3, right: 3, width: 19, height: 19, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '19px', padding: 0 }}>✕</button>
       )}
     </div>
   );
@@ -443,10 +701,10 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove }) {
   );
 }
 
-// Visualizador em tela cheia: abre ao clicar numa miniatura. Setas (teclado ou
-// botões) andam entre as fotos do lugar; Esc, clique no fundo ou no ✕ fecham.
 function PhotoLightbox({ photos, openId, onSetId, onClose }) {
-  const { useEffect } = React;
+  const { useEffect, useState, useRef } = React;
+  const [dx, setDx] = useState(0);
+  const arrasto = useRef({ x0: 0, ativo: false });
   const C = window.Mipas.theme;
   const idx = Math.max(0, photos.findIndex(p => p.id === openId));
   const ph = photos[idx];
@@ -467,6 +725,24 @@ function PhotoLightbox({ photos, openId, onSetId, onClose }) {
 
   if (!ph) return null;
 
+  const LIMIAR = 60;
+  const aoArrastarInicio = (ev) => {
+    if (photos.length < 2) return;
+    arrasto.current = { x0: ev.clientX, ativo: true };
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+  };
+  const aoArrastar = (ev) => {
+    if (!arrasto.current.ativo) return;
+    setDx(ev.clientX - arrasto.current.x0);
+  };
+  const aoArrastarFim = () => {
+    if (!arrasto.current.ativo) return;
+    const d = dx;
+    arrasto.current.ativo = false;
+    setDx(0);
+    if (Math.abs(d) > LIMIAR) go(d < 0 ? 1 : -1);
+  };
+
   const arrow = (dir, glyph) => (
     <button onClick={ev => { ev.stopPropagation(); go(dir); }} style={{
       position: 'absolute', top: '50%', transform: 'translateY(-50%)', [dir < 0 ? 'left' : 'right']: 14,
@@ -475,17 +751,24 @@ function PhotoLightbox({ photos, openId, onSetId, onClose }) {
     }}>{glyph}</button>
   );
 
-  // Portal pro body: dentro do card o "position: fixed" ficaria preso ao
-  // elemento animado (transform cria bloco de contenção) e a foto abriria
-  // recortada dentro do cartão em vez de ocupar a tela.
   return ReactDOM.createPortal(
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,.9)',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 24, boxSizing: 'border-box', animation: 'fadeIn .15s',
     }}>
-      <img src={ph.url} alt={ph.title || ''} onClick={ev => ev.stopPropagation()}
-        style={{ maxWidth: '100%', maxHeight: 'calc(100% - 90px)', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
+      <img src={ph.url} alt={ph.title || ''} draggable={false}
+        onClick={ev => ev.stopPropagation()}
+        onPointerDown={aoArrastarInicio}
+        onPointerMove={aoArrastar}
+        onPointerUp={aoArrastarFim}
+        onPointerCancel={aoArrastarFim}
+        style={{
+          maxWidth: '100%', maxHeight: 'calc(100% - 90px)', objectFit: 'contain', borderRadius: 10, display: 'block',
+          touchAction: 'pan-y', transform: `translateX(${dx}px)`,
+          transition: arrasto.current.ativo ? 'none' : 'transform .18s',
+          cursor: photos.length > 1 ? 'grab' : 'default',
+        }} />
 
       {(ph.title || ph.description) && (
         <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 14, maxWidth: 620, textAlign: 'center' }}>
@@ -522,18 +805,13 @@ const SORT_LABELS = {
 };
 
 const NUMERIC_SORT_ACCESSORS = {
-  rank: p => p.rank,
   distancia: p => p.distanceKm,
   nota: p => p.rating,
   valor: p => p.avg_price,
 };
 
-// Um lugar da lista. Fechado por padrão (só o essencial), abre ao clicar —
-// sem isso a lista virava uma coluna gigante de cartões. Aberto, o conteúdo
-// tem altura máxima com rolagem própria. A edição é um rascunho local: nada
-// vai pro banco até clicar em Salvar, e aí vai tudo numa requisição só.
-function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRemove, onSave, onAddPhoto, onRemovePhoto }) {
-  const { useState, useEffect, useMemo } = React;
+function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos }) {
+  const { useState, useEffect, useMemo, useRef } = React;
   const C = window.Mipas.theme;
 
   const fromPlace = () => ({
@@ -542,17 +820,14 @@ function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRe
     rating: p.rating ?? '',
     avg_price: p.avg_price ?? '',
     instagram: p.instagram ?? '',
-    rank: p.rank ?? '',
   });
   const [draft, setDraft] = useState(fromPlace);
   const [photoEdits, setPhotoEdits] = useState({});
   const [saving, setSaving] = useState(false);
 
-  // Recarrega o rascunho quando o lugar muda no servidor (ex: "Rankear por
-  // nota") — mas não enquanto está salvando, pra não piscar valor antigo.
   useEffect(() => {
     if (!saving) { setDraft(fromPlace()); setPhotoEdits({}); }
-  }, [p.id, p.description, p.category, p.rating, p.avg_price, p.instagram, p.rank]);
+  }, [p.id, p.description, p.category, p.rating, p.avg_price, p.instagram]);
 
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const editPhoto = (photoId, patch) => setPhotoEdits(m => ({ ...m, [photoId]: { ...(m[photoId] || {}), ...patch } }));
@@ -563,7 +838,6 @@ function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRe
     instagram: v => (String(v).trim().replace(/^@/, '') || null),
     rating: v => (v === '' || v == null ? null : parseFloat(v)),
     avg_price: v => (v === '' || v == null ? null : parseFloat(v)),
-    rank: v => (v === '' || v == null ? null : parseInt(v, 10)),
   };
 
   const patch = useMemo(() => {
@@ -620,23 +894,45 @@ function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRe
 
   const nFotos = (p.photos || []).length;
 
+  const cliqueRef = useRef(null);
+  useEffect(() => () => clearTimeout(cliqueRef.current), []);
+  const clique = () => {
+    clearTimeout(cliqueRef.current);
+    cliqueRef.current = setTimeout(onToggle, 220);
+  };
+  const duploClique = () => {
+    clearTimeout(cliqueRef.current);
+    onOpenMap(p);
+  };
+
   return (
     <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
-      <div onClick={onToggle} title={expanded ? 'Fechar' : 'Abrir detalhes'}
+      <div onClick={clique} onDoubleClick={duploClique} title="Clique para abrir, duplo clique para ver no mapa"
         style={{ height: 56, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: 'pointer' }}>
-        <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 15, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 38px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+        <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 15, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 20px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
           {p.name}
         </div>
-        <span style={{ position: 'absolute', right: 14, color: 'rgba(255,255,255,.85)', fontSize: 13, fontWeight: 700 }}>{expanded ? '▴' : '▾'}</span>
       </div>
 
-      <div style={{ padding: '10px 14px 12px' }}>
+      <div onClick={expanded ? undefined : clique} onDoubleClick={expanded ? undefined : duploClique}
+        style={{ padding: '10px 14px 12px', cursor: expanded ? 'default' : 'pointer' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
           <AddressLink place={p} fontSize={12.5} />
-          <button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" style={{
-            border: `1px solid ${C.line}`, background: C.cream, borderRadius: 999, padding: '3px 10px',
-            fontFamily: 'Inter', fontWeight: 700, fontSize: 11.5, color: C.coral, cursor: 'pointer', flexShrink: 0,
-          }}>no mapa</button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+            <button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" style={{
+              border: `1px solid ${C.line}`, background: C.cream, borderRadius: 999, width: 26, height: 26,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.coral, cursor: 'pointer', padding: 0,
+            }}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M8 14.5S13 9 13 5.6A5 5 0 0 0 3 5.6C3 9 8 14.5 8 14.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                <circle cx="8" cy="5.5" r="1.8" fill="currentColor" />
+              </svg>
+            </button>
+            <button onClick={ev => { ev.stopPropagation(); onToggle(); }} title={expanded ? 'Fechar' : (canEdit ? 'Editar este lugar' : 'Ver detalhes')} style={{
+              border: `1px solid ${expanded ? C.coral : C.line}`, background: expanded ? C.coral + '1E' : C.cream, borderRadius: 999, padding: '3px 10px',
+              fontFamily: 'Inter', fontWeight: 700, fontSize: 11.5, color: C.coral, cursor: 'pointer',
+            }}>{expanded ? 'fechar ▴' : (canEdit ? 'editar ▾' : 'detalhes ▾')}</button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
@@ -644,15 +940,13 @@ function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRe
           {p.category && chip(p.category)}
           {p.rating != null && chip(`★ ${p.rating}`, C.coral)}
           {p.avg_price != null && chip(`R$ ${Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
-          {list.ranking_enabled && p.rank != null && chip(`#${p.rank}`, C.coral)}
+          {list.ranking_enabled && rank != null && chip(`#${rank}`, C.coral)}
           {p.instagram && <InstagramButton handle={p.instagram} />}
           {nFotos > 0 && chip(`${nFotos} ${nFotos === 1 ? 'foto' : 'fotos'}`)}
         </div>
 
         {!expanded && p.description && (
-          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 500, color: C.sub, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {p.description}
-          </div>
+          <RichText html={p.description} style={{ marginTop: 8, fontSize: 12.5, fontWeight: 500, color: C.sub, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} />
         )}
 
         {expanded && (
@@ -661,9 +955,8 @@ function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRe
               {canEdit ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {field('Descrição', (
-                    <textarea value={draft.description} onChange={e => set('description', e.target.value)} rows={3}
-                      placeholder="Como é o lugar, o que pedir, vibe geral…"
-                      style={{ ...inputStyle, fontWeight: 500, resize: 'vertical' }} />
+                    <RichTextEditor value={p.description} onChange={v => set('description', v)}
+                      placeholder="Como é o lugar, o que pedir, vibe geral…" minHeight={64} />
                   ))}
                   <div style={{ display: 'flex', gap: 8 }}>
                     {field('Categoria', <input value={draft.category} onChange={e => set('category', e.target.value)} placeholder="Ex: Bar" style={inputStyle} />)}
@@ -671,15 +964,15 @@ function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRe
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {field('Valor médio (R$)', <input type="number" min="0" step="0.01" value={draft.avg_price} onChange={e => set('avg_price', e.target.value)} placeholder="—" style={inputStyle} />)}
-                    {list.ranking_enabled && field('Rank', <input type="number" value={draft.rank} onChange={e => set('rank', e.target.value)} placeholder="—" style={inputStyle} />)}
                   </div>
                   {field('Instagram', <input value={draft.instagram} onChange={e => set('instagram', e.target.value)} placeholder="@dolugar" style={inputStyle} />)}
                 </div>
               ) : p.description && (
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{p.description}</div>
+                <RichText html={p.description} style={{ fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px', lineHeight: 1.45 }} />
               )}
 
               <PhotoGallery photos={p.photos} canEdit={canEdit} edits={photoEdits} onEdit={editPhoto}
+                onReorder={ids => onReorderPhotos(p.id, ids)}
                 onAdd={(file, title) => onAddPhoto(p.id, file, title)}
                 onRemove={photo => onRemovePhoto(p.id, photo)} />
             </div>
@@ -704,7 +997,7 @@ function PlaceRow({ place: p, list, canEdit, expanded, onToggle, onOpenMap, onRe
   );
 }
 
-function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onToggleRanking, onAutoRank, canEdit, variant }) {
+function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onToggleRanking, canEdit, variant }) {
   const { useState, useMemo, useEffect } = React;
   const C = window.Mipas.theme;
   const isPanel = variant === 'panel';
@@ -735,11 +1028,22 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onS
     distanceKm: home ? window.Mipas.haversineKm(home.latitude, home.longitude, p.latitude, p.longitude) : null,
   })), [places, home]);
 
+  const ranks = useMemo(() => window.Mipas.computeRanks(places), [places]);
+
   const sortedPlaces = useMemo(() => {
     if (sortBy === 'padrao') return withDistance;
     const dir = sortDir === 'asc' ? 1 : -1;
     const sorted = [...withDistance];
-    if (NUMERIC_SORT_ACCESSORS[sortBy]) {
+    if (sortBy === 'rank') {
+      sorted.sort((a, b) => {
+        const ra = ranks[a.id], rb = ranks[b.id];
+        if (ra == null && rb == null) return String(a.name).localeCompare(String(b.name), 'pt-BR');
+        if (ra == null) return 1;
+        if (rb == null) return -1;
+        if (ra !== rb) return (ra - rb) * dir;
+        return String(a.name).localeCompare(String(b.name), 'pt-BR');
+      });
+    } else if (NUMERIC_SORT_ACCESSORS[sortBy]) {
       const accessor = NUMERIC_SORT_ACCESSORS[sortBy];
       sorted.sort((a, b) => {
         const av = accessor(a), bv = accessor(b);
@@ -757,7 +1061,7 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onS
       });
     }
     return sorted;
-  }, [withDistance, sortBy, sortDir]);
+  }, [withDistance, sortBy, sortDir, ranks]);
 
   return (
     <div style={isPanel
@@ -786,10 +1090,7 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onS
             <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.sub }}>Ranking nesta lista {list.ranking_enabled ? 'ativado' : 'desativado'}</span>
           </button>
           {list.ranking_enabled && (
-            <button onClick={onAutoRank} title="Preenche o rank de todos os lugares a partir da nota (maior nota = #1)" style={{
-              border: `1.5px solid ${C.line}`, background: C.surface, borderRadius: 999, padding: '5px 12px',
-              fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: C.coral, cursor: 'pointer',
-            }}>★ Rankear por nota</button>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: C.sub }}>a posição vem da nota; notas iguais empatam</span>
           )}
         </div>
       )}
@@ -813,14 +1114,15 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onS
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
         {sortedPlaces.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
         {sortedPlaces.map(p => (
-          <PlaceRow key={p.id} place={p} list={list} canEdit={canEdit}
+          <PlaceRow key={p.id} place={p} list={list} rank={ranks[p.id]} canEdit={canEdit}
             expanded={expandedId === p.id}
             onToggle={() => setExpandedId(id => (id === p.id ? null : p.id))}
             onOpenMap={onOpen}
             onRemove={onRemove}
             onSave={onSavePlace}
             onAddPhoto={onAddPhoto}
-            onRemovePhoto={onRemovePhoto} />
+            onRemovePhoto={onRemovePhoto}
+            onReorderPhotos={onReorderPhotos} />
         ))}
       </div>
     </div>

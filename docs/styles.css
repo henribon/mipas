@@ -1,7 +1,3 @@
-/* Variáveis de tema: o dark é o padrão; body.light sobrescreve.
-   As cores usadas inline nos componentes vêm de window.Mipas.theme
-   (config.js) — estas variáveis cobrem o que é CSS puro (body, mapa,
-   inputs, scroll etc). Os dois lugares precisam andar juntos. */
 :root {
   --paper: #0D0D0D;
   --ink: #F0EEE6;
@@ -38,11 +34,6 @@ a:hover { color: var(--accent-hover); }
   background: var(--paper);
 }
 
-/* Dark: inverte os tiles claros do CartoDB pra virar um azul-marinho escuro
-   (estilo "dark mode" de apps de mapa), um pouco mais claro que o fundo pra
-   dar leitura às vias. Light: tiles levemente escurecidos pra não estourar
-   de branco ao lado dos blocos. Só afeta a camada dos tiles — pins e popups
-   ficam em camadas separadas do Leaflet. */
 .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(1.12) contrast(0.88) saturate(1.3);
 }
@@ -58,8 +49,6 @@ input, textarea, select { font-family: 'Inter', sans-serif; }
 select option { background: var(--paper); color: var(--ink); }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--ink) !important; }
 
-/* Cabeçalho de seção: traço curto de acento à esquerda, no lugar do antigo
-   sublinhado de giz. */
 .section-title {
   display: flex;
   align-items: center;
@@ -83,8 +72,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--i
 }
 .pin-anim { animation: pinDrop .4s ease-out; }
 
-/* Desktop: os "bottom sheets" viram modais centralizados em vez de ocupar a
-   largura toda da tela (que só faz sentido em telas estreitas de celular). */
 @media (min-width: 720px) {
   .mipas-sheet {
     left: 50% !important;

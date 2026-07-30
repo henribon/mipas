@@ -5,8 +5,6 @@ function App() {
   const C = window.Mipas.theme;
   const data = window.Mipas.data;
 
-  // ?list=<uuid> na URL => modo compartilhamento: sempre somente-leitura, mesmo
-  // que o dono esteja logado no mesmo navegador, e restrito a essa lista só.
   const sharedListId = useMemo(() => new URLSearchParams(window.location.search).get('list'), []);
   const sharedMode = !!sharedListId;
 
@@ -35,8 +33,6 @@ function App() {
   const [homeOpen, setHomeOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
   const [sidebarHidden, setSidebarHidden] = useState(false);
-  // Mobile: lista de onde a pessoa veio ao abrir um destaque no mapa — o X do
-  // card volta pra ela. Tocar no mapa limpa isso (a pessoa "ficou" no mapa).
   const [returnListId, setReturnListId] = useState(null);
   const [themeMode, setThemeMode] = useState(() => (document.body.classList.contains('light') ? 'light' : 'dark'));
 
@@ -86,8 +82,6 @@ function App() {
   useEffect(() => {
     const m = window.Mipas.map.initMap(mapRef.current);
     leafRef.current = m;
-    // Tocar no fundo do mapa (fora de pins e cards) fecha o destaque e desfaz
-    // o "voltar pra lista" — a pessoa escolheu ficar só no mapa.
     m.on('click', () => { setSelId(null); setReturnListId(null); });
     setTimeout(() => m.invalidateSize(), 300);
     return () => m.remove();
@@ -140,9 +134,6 @@ function App() {
 
   const goToPlace = (p) => {
     setTab('map');
-    // Desktop: esconde a lateral (mapa vira tela cheia) mas mantém a lista
-    // aberta, pro "Voltar" devolver exatamente onde a pessoa estava.
-    // Mobile: fecha o overlay da lista, como sempre.
     if (isDesktop) {
       setSidebarHidden(true);
     } else {
@@ -177,7 +168,20 @@ function App() {
         instagram: d.instagram?.trim().replace(/^@/, '') || null,
         list_id: d.list_id,
       });
-      setPlaces(ps => [...ps, created]);
+      let comFotos = created;
+      if (d.photos && d.photos.length) {
+        try {
+          const enviadas = [];
+          for (const item of d.photos) {
+            enviadas.push(await data.uploadPhoto(session.user.id, created.id, item.file, item.title));
+            URL.revokeObjectURL(item.preview);
+          }
+          comFotos = { ...created, photos: [...(created.photos || []), ...enviadas] };
+        } catch (err) {
+          alert('O lugar foi guardado, mas não deu pra enviar as fotos.');
+        }
+      }
+      setPlaces(ps => [...ps, comFotos]);
       setDraft(null);
       setSearchOpen(false);
       setQuery('');
@@ -236,8 +240,6 @@ function App() {
     }
   };
 
-  // Salva o lugar inteiro de uma vez (botão Salvar do bloco): os campos vão
-  // numa requisição só, e as legendas das fotos alteradas em seguida.
   const savePlaceEdits = async (placeId, patch, photoPatches) => {
     try {
       let updated = null;
@@ -257,32 +259,24 @@ function App() {
     }
   };
 
-  // Preenche o rank da lista inteira a partir da nota (maior nota = rank 1).
-  // Lugares sem nota perdem o rank (ficam fora do ranking até ganharem nota).
-  const autoRankByRating = async (list) => {
-    const listPlaces = places.filter(p => p.list_id === list.id);
-    const rated = listPlaces
-      .filter(p => p.rating != null)
-      .sort((a, b) => (b.rating - a.rating) || a.created_at.localeCompare(b.created_at));
-    const updates = [
-      ...rated.map((p, i) => ({ id: p.id, rank: i + 1 })),
-      ...listPlaces.filter(p => p.rating == null && p.rank != null).map(p => ({ id: p.id, rank: null })),
-    ].filter(u => { const cur = listPlaces.find(p => p.id === u.id); return cur.rank !== u.rank; });
-    if (updates.length === 0) return;
-    try {
-      const results = await Promise.all(updates.map(u => data.updatePlace(u.id, { rank: u.rank })));
-      setPlaces(ps => ps.map(p => results.find(r => r.id === p.id) || p));
-    } catch (e) {
-      alert('Não deu pra rankear por nota.');
-    }
-  };
-
   const addPhoto = async (placeId, file, title) => {
     try {
       const photo = await data.uploadPhoto(session.user.id, placeId, file, title);
       setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: [...(p.photos || []), photo] } : p)));
     } catch (e) {
       alert('Não deu pra enviar a foto.');
+    }
+  };
+
+  const reorderPhotos = async (placeId, ids) => {
+    const antes = places.find(p => p.id === placeId)?.photos || [];
+    const novas = ids.map(id => antes.find(ph => ph.id === id)).filter(Boolean);
+    setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: novas } : p)));
+    try {
+      await data.reorderPhotos(ids);
+    } catch (e) {
+      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: antes } : p)));
+      alert('Não deu pra salvar a ordem das fotos.');
     }
   };
 
@@ -415,7 +409,7 @@ function App() {
               <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
             )}
             {results.map((r, i) => (
-              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', list_id: lists[0]?.id })}
+              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', photos: [], list_id: lists[0]?.id })}
                 style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
@@ -451,8 +445,8 @@ function App() {
           onSavePlace={savePlaceEdits}
           onAddPhoto={addPhoto}
           onRemovePhoto={removePhoto}
+          onReorderPhotos={reorderPhotos}
           onToggleRanking={() => toggleRanking(openList)}
-          onAutoRank={() => autoRankByRating(openList)}
           canEdit={canEdit}
           variant="overlay"
         />
@@ -498,8 +492,8 @@ function App() {
             onSavePlace={savePlaceEdits}
             onAddPhoto={addPhoto}
             onRemovePhoto={removePhoto}
+          onReorderPhotos={reorderPhotos}
             onToggleRanking={() => toggleRanking(openList)}
-            onAutoRank={() => autoRankByRating(openList)}
             canEdit={canEdit}
             variant="panel"
           />
