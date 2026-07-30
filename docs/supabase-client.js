@@ -124,10 +124,38 @@ window.Mipas = window.Mipas || {};
     return (await signedUrlMap([path]))[path] || null;
   }
 
+  const MAX_LADO = 1600;
+  const JPEG_QUALIDADE = 0.82;
+
+  async function comprimirImagem(file) {
+    if (!file.type || !file.type.startsWith('image/') || /svg|gif/.test(file.type)) return file;
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) {
+      try { bitmap = await createImageBitmap(file); } catch (e2) { return file; }
+    }
+    const escala = Math.min(1, MAX_LADO / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * escala));
+    const h = Math.max(1, Math.round(bitmap.height * escala));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', JPEG_QUALIDADE));
+    if (!blob || blob.size >= file.size) return file;
+    return blob;
+  }
+
   async function uploadPhoto(ownerId, placeId, file, title) {
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const enviar = await comprimirImagem(file);
+    const ext = enviar.type === 'image/jpeg' ? 'jpg' : ((file.name || '').split('.').pop() || 'jpg').toLowerCase();
     const path = `${ownerId}/${placeId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error: uploadError } = await client.storage.from('place-photos').upload(path, file);
+    const { error: uploadError } = await client.storage.from('place-photos').upload(path, enviar, { contentType: enviar.type || file.type });
     if (uploadError) throw uploadError;
     const { data, error } = await client.from('place_photos')
       .insert({ place_id: placeId, storage_path: path, title: title || null })
