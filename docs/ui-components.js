@@ -226,10 +226,70 @@ function DraftPhotos({ photos, onChange }) {
   );
 }
 
+function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto }) {
+  const { useState } = React;
+  const C = window.Mipas.theme;
+  const [busca, setBusca] = useState('');
+  const termo = busca.trim().toLowerCase();
+  const filtradas = termo ? lists.filter(l => l.name.toLowerCase().includes(termo)) : lists;
+  return (
+    <div style={{ marginTop: 8 }}>
+      {selecionadas.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          {selecionadas.map(id => {
+            const l = lists.find(x => x.id === id);
+            if (!l) return null;
+            return (
+              <button key={id} onClick={() => onAlternar(id)} title="Tirar desta lista" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${l.color}66`,
+                background: l.color + '1E', color: l.color, borderRadius: 999, padding: '4px 10px',
+                fontFamily: 'Inter', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              }}>{l.emoji} {l.name} <span style={{ opacity: .7 }}>✕</span></button>
+            );
+          })}
+        </div>
+      )}
+      {lists.length > 6 && (
+        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar lista…" style={{
+          width: '100%', boxSizing: 'border-box', marginBottom: 6, background: C.surface,
+          border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 12px', fontSize: 13, fontWeight: 600, color: C.ink,
+        }} />
+      )}
+      <div style={{ maxHeight: compacto ? 132 : 176, overflowY: 'auto', border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface }}>
+        {filtradas.map(l => {
+          const marcada = selecionadas.includes(l.id);
+          return (
+            <label key={l.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', cursor: 'pointer',
+              borderBottom: `1px solid ${C.line}`, background: marcada ? l.color + '14' : 'transparent',
+            }}>
+              <input type="checkbox" checked={marcada} onChange={() => onAlternar(l.id)} style={{ accentColor: C.coral, width: 15, height: 15, cursor: 'pointer' }} />
+              <span style={{ fontSize: 15 }}>{l.emoji}</span>
+              <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 13.5, color: C.ink }}>{l.name}</span>
+            </label>
+          );
+        })}
+        {filtradas.length === 0 && (
+          <div style={{ padding: '12px', fontSize: 13, fontWeight: 600, color: C.sub, textAlign: 'center' }}>Nenhuma lista com esse nome</div>
+        )}
+      </div>
+      {onNewList && (
+        <button onClick={onNewList} style={{
+          marginTop: 6, width: '100%', boxSizing: 'border-box', border: `1.5px dashed ${C.coral}66`,
+          borderRadius: 10, padding: '9px', background: 'none', color: C.coral,
+          fontFamily: 'Inter', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+        }}>+ Nova lista</button>
+      )}
+    </div>
+  );
+}
+
 function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving }) {
   const C = window.Mipas.theme;
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
-  const canSave = draft.name.trim() && draft.list_id && !saving;
+  const listIds = draft.list_ids || [];
+  const alternaLista = (id) => set('list_ids', listIds.includes(id) ? listIds.filter(x => x !== id) : [...listIds, id]);
+  const canSave = draft.name.trim() && listIds.length > 0 && !saving;
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 850 }}>
       <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
@@ -240,20 +300,8 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
         <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Dê um nome só seu</div>
         <input autoFocus value={draft.name} onChange={e => set('name', e.target.value)} placeholder='Ex: "Melhor pastel da cidade"'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
-        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Em qual lista?</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-          <select value={draft.list_id || ''} onChange={e => set('list_id', e.target.value)} style={{
-            flex: 1, minWidth: 0, boxSizing: 'border-box', background: C.surface, border: `1.5px solid ${C.line}`,
-            borderRadius: 12, padding: '13px 14px', fontSize: 15, fontWeight: 600, color: C.ink, cursor: 'pointer',
-          }}>
-            {!draft.list_id && <option value="">Escolha uma lista…</option>}
-            {lists.map(l => <option key={l.id} value={l.id}>{l.emoji} {l.name}</option>)}
-          </select>
-          <button onClick={onNewList} title="Criar uma lista nova" style={{
-            border: `1.5px dashed ${C.coral}88`, borderRadius: 12, padding: '13px 14px', cursor: 'pointer',
-            fontFamily: 'Inter', fontWeight: 700, fontSize: 13.5, background: 'none', color: C.coral, flexShrink: 0, whiteSpace: 'nowrap',
-          }}>+ Nova</button>
-        </div>
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Em quais listas? <span style={{ color: C.sub, fontWeight: 500 }}>(pode ser mais de uma)</span></div>
+        <ListPicker lists={lists} selecionadas={listIds} onAlternar={alternaLista} onNewList={onNewList} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Categoria <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, você escolhe o nome)</span></div>
         <input value={draft.category || ''} onChange={e => set('category', e.target.value)} placeholder='Ex: "Bar", "Pizzaria", "Mirante"…'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
@@ -511,7 +559,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {lists.map(l => {
-          const count = places.filter(p => p.list_id === l.id).length;
+          const count = places.filter(p => (p.list_ids || []).includes(l.id)).length;
           return (
             <div key={l.id} onClick={() => onOpenList(l.id)} style={{
               display: 'flex', alignItems: 'center', gap: 14, background: C.surface, borderRadius: 16,
@@ -810,7 +858,7 @@ const NUMERIC_SORT_ACCESSORS = {
   valor: p => p.avg_price,
 };
 
-function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos }) {
+function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos }) {
   const { useState, useEffect, useMemo, useRef } = React;
   const C = window.Mipas.theme;
 
@@ -820,6 +868,7 @@ function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap
     rating: p.rating ?? '',
     avg_price: p.avg_price ?? '',
     instagram: p.instagram ?? '',
+    list_ids: [...(p.list_ids || [])],
   });
   const [draft, setDraft] = useState(fromPlace);
   const [photoEdits, setPhotoEdits] = useState({});
@@ -827,7 +876,7 @@ function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap
 
   useEffect(() => {
     if (!saving) { setDraft(fromPlace()); setPhotoEdits({}); }
-  }, [p.id, p.description, p.category, p.rating, p.avg_price, p.instagram]);
+  }, [p.id, p.description, p.category, p.rating, p.avg_price, p.instagram, (p.list_ids || []).join(',')]);
 
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const editPhoto = (photoId, patch) => setPhotoEdits(m => ({ ...m, [photoId]: { ...(m[photoId] || {}), ...patch } }));
@@ -863,12 +912,22 @@ function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap
     return Object.keys(out).length ? { id, patch: out } : null;
   }).filter(Boolean), [photoEdits, p.photos]);
 
-  const dirty = Object.keys(patch).length > 0 || photoPatches.length > 0;
+  const listasMudaram = useMemo(() => {
+    const antes = [...(p.list_ids || [])].sort().join(',');
+    const agora = [...draft.list_ids].sort().join(',');
+    return antes !== agora;
+  }, [draft.list_ids, p.list_ids]);
+
+  const dirty = Object.keys(patch).length > 0 || photoPatches.length > 0 || listasMudaram;
 
   const save = async () => {
+    if (draft.list_ids.length === 0) {
+      alert('O lugar precisa estar em pelo menos uma lista. Para apagá-lo de vez, use Excluir.');
+      return;
+    }
     setSaving(true);
     try {
-      await onSave(p.id, patch, photoPatches);
+      await onSave(p.id, patch, photoPatches, listasMudaram ? draft.list_ids : null);
       setPhotoEdits({});
     } finally {
       setSaving(false);
@@ -943,6 +1002,14 @@ function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap
           {list.ranking_enabled && rank != null && chip(`#${rank}`, C.coral)}
           {p.instagram && <InstagramButton handle={p.instagram} />}
           {nFotos > 0 && chip(`${nFotos} ${nFotos === 1 ? 'foto' : 'fotos'}`)}
+          {(p.list_ids || []).filter(id => id !== list.id).map(id => {
+            const outra = (todasListas || []).find(l => l.id === id);
+            return outra ? (
+              <div key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: outra.color, background: outra.color + '1E', borderRadius: 999, padding: '4px 10px' }}>
+                {outra.emoji} {outra.name}
+              </div>
+            ) : null;
+          })}
         </div>
 
         {!expanded && p.description && (
@@ -966,6 +1033,10 @@ function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap
                     {field('Valor médio (R$)', <input type="number" min="0" step="0.01" value={draft.avg_price} onChange={e => set('avg_price', e.target.value)} placeholder="—" style={inputStyle} />)}
                   </div>
                   {field('Instagram', <input value={draft.instagram} onChange={e => set('instagram', e.target.value)} placeholder="@dolugar" style={inputStyle} />)}
+                  {field('Listas', (
+                    <ListPicker lists={todasListas} selecionadas={draft.list_ids} compacto
+                      onAlternar={id => set('list_ids', draft.list_ids.includes(id) ? draft.list_ids.filter(x => x !== id) : [...draft.list_ids, id])} />
+                  ))}
                 </div>
               ) : p.description && (
                 <RichText html={p.description} style={{ fontSize: 13, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 10, padding: '8px 12px', lineHeight: 1.45 }} />
@@ -987,7 +1058,13 @@ function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap
                   <button onClick={cancel} style={{ border: `1px solid ${C.line}`, background: 'none', borderRadius: 10, padding: '9px 14px', fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.sub, cursor: 'pointer' }}>Desfazer</button>
                 )}
                 <div style={{ flex: 1 }} />
-                <button onClick={() => onRemove(p.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px' }}>Excluir</button>
+                {(p.list_ids || []).length > 1 && (
+                  <button onClick={() => onRemoveFromList(p)} title={`Continua nas outras ${(p.list_ids || []).length - 1} listas`} style={{
+                    border: `1px solid ${C.line}`, background: 'none', borderRadius: 10, padding: '7px 12px',
+                    fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: C.sub, cursor: 'pointer',
+                  }}>Tirar desta lista</button>
+                )}
+                <button onClick={() => onRemove(p.id)} title="Apaga o lugar de todas as listas" style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px' }}>Excluir</button>
               </div>
             )}
           </React.Fragment>
@@ -997,7 +1074,7 @@ function PlaceRow({ place: p, list, rank, canEdit, expanded, onToggle, onOpenMap
   );
 }
 
-function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onToggleRanking, canEdit, variant }) {
+function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onToggleRanking, canEdit, variant }) {
   const { useState, useMemo, useEffect } = React;
   const C = window.Mipas.theme;
   const isPanel = variant === 'panel';
@@ -1063,6 +1140,19 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onS
     return sorted;
   }, [withDistance, sortBy, sortDir, ranks]);
 
+  const SEM_CATEGORIA = 'Sem categoria';
+  const nomeCategoria = (p) => ((p.category || '').trim() || SEM_CATEGORIA);
+
+  const secoes = useMemo(() => {
+    if (sortBy !== 'categoria') return [{ titulo: null, itens: sortedPlaces }];
+    const nomes = [];
+    sortedPlaces.forEach(p => {
+      const c = nomeCategoria(p);
+      if (!nomes.includes(c)) nomes.push(c);
+    });
+    return nomes.map(c => ({ titulo: c, itens: sortedPlaces.filter(p => nomeCategoria(p) === c) }));
+  }, [sortedPlaces, sortBy]);
+
   return (
     <div style={isPanel
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
@@ -1113,16 +1203,30 @@ function ListDetail({ list, places, home, onBack, onOpen, onRemove, onShare, onS
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
         {sortedPlaces.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
-        {sortedPlaces.map(p => (
-          <PlaceRow key={p.id} place={p} list={list} rank={ranks[p.id]} canEdit={canEdit}
-            expanded={expandedId === p.id}
-            onToggle={() => setExpandedId(id => (id === p.id ? null : p.id))}
-            onOpenMap={onOpen}
-            onRemove={onRemove}
-            onSave={onSavePlace}
-            onAddPhoto={onAddPhoto}
-            onRemovePhoto={onRemovePhoto}
-            onReorderPhotos={onReorderPhotos} />
+        {secoes.map(sec => (
+          <React.Fragment key={sec.titulo || 'todos'}>
+            {sec.titulo && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+                <span style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 12, letterSpacing: .6, textTransform: 'uppercase', color: sec.titulo === SEM_CATEGORIA ? C.sub : C.coral, flexShrink: 0 }}>
+                  {sec.titulo}
+                </span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.sub, flexShrink: 0 }}>{sec.itens.length}</span>
+                <div style={{ flex: 1, height: 1, background: C.line }} />
+              </div>
+            )}
+            {sec.itens.map(p => (
+              <PlaceRow key={p.id} place={p} list={list} todasListas={todasListas} rank={ranks[p.id]} canEdit={canEdit}
+                expanded={expandedId === p.id}
+                onToggle={() => setExpandedId(id => (id === p.id ? null : p.id))}
+                onOpenMap={onOpen}
+                onRemove={onRemove}
+                onRemoveFromList={lugar => onRemoveFromList(lugar, list.id)}
+                onSave={onSavePlace}
+                onAddPhoto={onAddPhoto}
+                onRemovePhoto={onRemovePhoto}
+                onReorderPhotos={onReorderPhotos} />
+            ))}
+          </React.Fragment>
         ))}
       </div>
     </div>

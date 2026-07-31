@@ -437,3 +437,100 @@ update public.place_photos ph
 grant select (position) on public.place_photos to anon;
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- Migração incremental (2026-07-30) — um lugar em várias listas.
+-- places.list_id guardava UMA lista. Passa a existir a tabela de ligação
+-- place_lists, e "público" deixa de ser "a lista do lugar é pública" e vira
+-- "ALGUMA lista do lugar é pública" — em places e também nas fotos.
+-- places.list_id fica no banco, nulo e sem uso, como rede de segurança.
+-- Idempotente: pode rodar de novo sem erro.
+-- ---------------------------------------------------------
+
+create table if not exists public.place_lists (
+  place_id    uuid not null references public.places(id) on delete cascade,
+  list_id     uuid not null references public.lists(id) on delete cascade,
+  owner_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  primary key (place_id, list_id)
+);
+
+create index if not exists idx_place_lists_list_id on public.place_lists(list_id);
+create index if not exists idx_place_lists_place_id on public.place_lists(place_id);
+
+insert into public.place_lists (place_id, list_id, owner_id)
+select p.id, p.list_id, p.owner_id from public.places p
+where p.list_id is not null
+on conflict (place_id, list_id) do nothing;
+
+alter table public.places alter column list_id drop not null;
+
+alter table public.place_lists enable row level security;
+
+drop policy if exists "public can read links of public lists" on public.place_lists;
+create policy "public can read links of public lists" on public.place_lists
+  for select to anon, authenticated using (
+    exists (select 1 from public.lists l where l.id = place_lists.list_id and l.is_public = true)
+  );
+
+drop policy if exists "owner can read own links" on public.place_lists;
+create policy "owner can read own links" on public.place_lists
+  for select to authenticated using (auth.uid() = owner_id);
+
+drop policy if exists "owner can insert own links" on public.place_lists;
+create policy "owner can insert own links" on public.place_lists
+  for insert to authenticated with check (
+    auth.uid() = owner_id
+    and exists (select 1 from public.lists l where l.id = place_lists.list_id and l.owner_id = auth.uid())
+    and exists (select 1 from public.places p where p.id = place_lists.place_id and p.owner_id = auth.uid())
+  );
+
+drop policy if exists "owner can delete own links" on public.place_lists;
+create policy "owner can delete own links" on public.place_lists
+  for delete to authenticated using (auth.uid() = owner_id);
+
+drop policy if exists "public can read places of public lists" on public.places;
+create policy "public can read places of public lists" on public.places
+  for select to anon, authenticated using (
+    exists (
+      select 1 from public.place_lists pl join public.lists l on l.id = pl.list_id
+      where pl.place_id = places.id and l.is_public = true
+    )
+  );
+
+drop policy if exists "owner can insert own places" on public.places;
+create policy "owner can insert own places" on public.places
+  for insert to authenticated with check (auth.uid() = owner_id);
+
+drop policy if exists "owner can update own places" on public.places;
+create policy "owner can update own places" on public.places
+  for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+
+drop policy if exists "public can read photos of public lists" on public.place_photos;
+create policy "public can read photos of public lists" on public.place_photos
+  for select to anon, authenticated using (
+    exists (
+      select 1 from public.places p
+      join public.place_lists pl on pl.place_id = p.id
+      join public.lists l on l.id = pl.list_id
+      where p.id = place_photos.place_id and l.is_public = true
+    )
+  );
+
+drop policy if exists "anyone can read photos of public lists" on storage.objects;
+create policy "anyone can read photos of public lists" on storage.objects
+  for select to anon, authenticated using (
+    bucket_id = 'place-photos'
+    and exists (
+      select 1 from public.place_photos ph
+      join public.places p on p.id = ph.place_id
+      join public.place_lists pl on pl.place_id = p.id
+      join public.lists l on l.id = pl.list_id
+      where ph.storage_path = storage.objects.name and l.is_public = true
+    )
+  );
+
+revoke select on public.place_lists from anon;
+grant select (place_id, list_id) on public.place_lists to anon;
+
+notify pgrst, 'reload schema';

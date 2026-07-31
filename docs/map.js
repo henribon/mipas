@@ -31,7 +31,7 @@ window.Mipas = window.Mipas || {};
     Object.values(markersRef.current).forEach(mk => mk.remove());
     markersRef.current = {};
     places.forEach(p => {
-      const list = lists.find(l => l.id === p.list_id);
+      const list = lists.find(l => (p.list_ids || []).includes(l.id));
       const marker = L.marker([p.latitude, p.longitude], { icon: buildMarkerIcon(list) }).addTo(map);
       marker.on('click', () => onMarkerClick(p));
       markersRef.current[p.id] = marker;

@@ -6,8 +6,9 @@ window.Mipas = window.Mipas || {};
 
   const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, ranking_enabled, created_at';
   const PHOTO_PUBLIC_COLS = 'id, place_id, storage_path, title, description, position, created_at';
-  const PLACE_PUBLIC_COLS = 'id, list_id, name, address, latitude, longitude, rank, category, '
-    + `rating, description, avg_price, instagram, created_at, place_photos(${PHOTO_PUBLIC_COLS})`;
+  const PLACE_PUBLIC_COLS = 'id, name, address, latitude, longitude, rank, category, '
+    + `rating, description, avg_price, instagram, created_at, place_lists(list_id), place_photos(${PHOTO_PUBLIC_COLS})`;
+  const PLACE_OWNER_COLS = '*, place_lists(list_id), place_photos(*)';
 
   async function isOwner() {
     const { data } = await client.auth.getSession();
@@ -15,7 +16,7 @@ window.Mipas = window.Mipas || {};
   }
 
   async function listCols() { return (await isOwner()) ? '*' : LIST_PUBLIC_COLS; }
-  async function placeCols() { return (await isOwner()) ? '*, place_photos(*)' : PLACE_PUBLIC_COLS; }
+  async function placeCols() { return (await isOwner()) ? PLACE_OWNER_COLS : PLACE_PUBLIC_COLS; }
 
   async function fetchLists() {
     const { data, error } = await client.from('lists').select(await listCols()).order('created_at');
@@ -36,7 +37,11 @@ window.Mipas = window.Mipas || {};
   }
 
   async function fetchPlacesByListId(listId) {
-    const { data, error } = await client.from('places').select(await placeCols()).eq('list_id', listId).order('created_at');
+    const cols = (await placeCols()).replace('place_lists(list_id)', 'place_lists!inner(list_id)');
+    const { data, error } = await client.from('places')
+      .select(cols)
+      .eq('place_lists.list_id', listId)
+      .order('created_at');
     if (error) throw error;
     return attachPhotoUrls(data);
   }
@@ -54,21 +59,64 @@ window.Mipas = window.Mipas || {};
   }
 
   async function deleteList(id) {
+    const { data: vinculos, error: readError } = await client.from('place_lists').select('place_id').eq('list_id', id);
+    if (readError) throw readError;
+    const candidatos = (vinculos || []).map(v => v.place_id);
+
     const { error } = await client.from('lists').delete().eq('id', id);
     if (error) throw error;
+
+    if (candidatos.length === 0) return [];
+    const { data: sobraram, error: restError } = await client.from('place_lists').select('place_id').in('place_id', candidatos);
+    if (restError) throw restError;
+    const aindaEmLista = new Set((sobraram || []).map(v => v.place_id));
+    const orfaos = candidatos.filter(pid => !aindaEmLista.has(pid));
+    if (orfaos.length) {
+      const { error: delError } = await client.from('places').delete().in('id', orfaos);
+      if (delError) throw delError;
+    }
+    return orfaos;
   }
 
-  async function createPlace({ name, address, latitude, longitude, category, rating, description, avg_price, instagram, list_id }) {
+  async function createPlace({ name, address, latitude, longitude, category, rating, description, avg_price, instagram, list_ids }) {
     const { data, error } = await client.from('places')
-      .insert({ name, address, latitude, longitude, category, rating, description, avg_price, instagram, list_id })
+      .insert({ name, address, latitude, longitude, category, rating, description, avg_price, instagram })
       .select('*, place_photos(*)').single();
     if (error) throw error;
-    return withPhotoUrls(data);
+    const ids = (list_ids || []).filter(Boolean);
+    if (ids.length) {
+      const { error: linkError } = await client.from('place_lists')
+        .insert(ids.map(list_id => ({ place_id: data.id, list_id })));
+      if (linkError) {
+        await client.from('places').delete().eq('id', data.id);
+        throw linkError;
+      }
+    }
+    const [pronto] = await attachPhotoUrls([{ ...data, place_lists: ids.map(list_id => ({ list_id })) }]);
+    return pronto;
+  }
+
+  async function setPlaceLists(placeId, listIds) {
+    const ids = (listIds || []).filter(Boolean);
+    const { data: atuais, error: readError } = await client.from('place_lists').select('list_id').eq('place_id', placeId);
+    if (readError) throw readError;
+    const antigos = (atuais || []).map(v => v.list_id);
+    const remover = antigos.filter(id => !ids.includes(id));
+    const inserir = ids.filter(id => !antigos.includes(id));
+    if (remover.length) {
+      const { error } = await client.from('place_lists').delete().eq('place_id', placeId).in('list_id', remover);
+      if (error) throw error;
+    }
+    if (inserir.length) {
+      const { error } = await client.from('place_lists').insert(inserir.map(list_id => ({ place_id: placeId, list_id })));
+      if (error) throw error;
+    }
+    return ids;
   }
 
   async function updatePlace(id, patch) {
     const { data, error } = await client.from('places').update(patch).eq('id', id)
-      .select('*, place_photos(*)').single();
+      .select(PLACE_OWNER_COLS).single();
     if (error) throw error;
     return withPhotoUrls(data);
   }
@@ -110,8 +158,8 @@ window.Mipas = window.Mipas || {};
       const photos = (p.place_photos || [])
         .map(ph => ({ ...ph, url: urls[ph.storage_path] || null }))
         .sort(byPosition);
-      const { place_photos, ...rest } = p;
-      return { ...rest, photos };
+      const { place_photos, place_lists, ...rest } = p;
+      return { ...rest, photos, list_ids: (place_lists || []).map(v => v.list_id) };
     });
   }
 
@@ -209,5 +257,6 @@ window.Mipas = window.Mipas || {};
     createPlace, updatePlace, deletePlace,
     fetchHome, saveHome, clearHome,
     uploadPhoto, updatePhoto, deletePhoto, reorderPhotos,
+    setPlaceLists,
   };
 })();

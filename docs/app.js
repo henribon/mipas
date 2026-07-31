@@ -166,7 +166,7 @@ function App() {
         description: d.description?.trim() || null,
         avg_price: d.avg_price === '' || d.avg_price == null ? null : parseFloat(d.avg_price),
         instagram: d.instagram?.trim().replace(/^@/, '') || null,
-        list_id: d.list_id,
+        list_ids: d.list_ids,
       });
       let comFotos = created;
       if (d.photos && d.photos.length) {
@@ -204,7 +204,7 @@ function App() {
       setLists(ls => [...ls, created]);
       setNewListOpen(false);
       if (pendingListPick && draft) {
-        setDraft(d => ({ ...d, list_id: created.id }));
+        setDraft(d => ({ ...d, list_ids: [...(d.list_ids || []), created.id] }));
         setPendingListPick(false);
       }
     } catch (e) {
@@ -215,13 +215,29 @@ function App() {
   };
 
   const removePlace = async (id) => {
-    if (!confirm('Excluir esse lugar?')) return;
+    const lugar = places.find(p => p.id === id);
+    const nListas = (lugar?.list_ids || []).length;
+    const aviso = nListas > 1
+      ? `Excluir esse lugar? Ele sai das ${nListas} listas em que está.`
+      : 'Excluir esse lugar?';
+    if (!confirm(aviso)) return;
     try {
       await data.deletePlace(id);
       setPlaces(ps => ps.filter(p => p.id !== id));
       setSelId(null);
     } catch (e) {
       alert('Não deu pra excluir.');
+    }
+  };
+
+  const removePlaceFromList = async (lugar, listId) => {
+    const restantes = (lugar.list_ids || []).filter(id => id !== listId);
+    if (restantes.length === 0) return;
+    try {
+      await data.setPlaceLists(lugar.id, restantes);
+      setPlaces(ps => ps.map(p => (p.id === lugar.id ? { ...p, list_ids: restantes } : p)));
+    } catch (e) {
+      alert('Não deu pra tirar o lugar desta lista.');
     }
   };
 
@@ -240,11 +256,16 @@ function App() {
     }
   };
 
-  const savePlaceEdits = async (placeId, patch, photoPatches) => {
+  const savePlaceEdits = async (placeId, patch, photoPatches, listIds) => {
     try {
       let updated = null;
+      if (listIds) {
+        await data.setPlaceLists(placeId, listIds);
+      }
       if (patch && Object.keys(patch).length > 0) {
         updated = await data.updatePlace(placeId, patch);
+      } else if (listIds) {
+        setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, list_ids: listIds } : p)));
       }
       const photos = await Promise.all((photoPatches || []).map(pp => data.updatePhoto(pp.id, pp.patch)));
       setPlaces(ps => ps.map(p => {
@@ -409,7 +430,7 @@ function App() {
               <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
             )}
             {results.map((r, i) => (
-              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', photos: [], list_id: lists[0]?.id })}
+              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', photos: [], list_ids: openListId && lists.some(l => l.id === openListId) ? [openListId] : (lists[0] ? [lists[0].id] : []) })}
                 style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
@@ -436,11 +457,13 @@ function App() {
       {!isDesktop && openList && (
         <ListDetail
           list={openList}
-          places={places.filter(p => p.list_id === openList.id)}
+          places={places.filter(p => (p.list_ids || []).includes(openList.id))}
+          todasListas={lists}
           home={home}
           onBack={() => setOpenListId(null)}
           onOpen={goToPlace}
           onRemove={removePlace}
+          onRemoveFromList={removePlaceFromList}
           onShare={() => shareList(openList)}
           onSavePlace={savePlaceEdits}
           onAddPhoto={addPhoto}
@@ -465,7 +488,7 @@ function App() {
       )}
 
       {sel && (isDesktop || tab === 'map') && !draft && (
-        <PlaceCard place={sel} list={lists.find(l => l.id === sel.list_id)}
+        <PlaceCard place={sel} list={lists.find(l => (sel.list_ids || []).includes(l.id))}
           onClose={() => {
             if (isDesktop && sidebarHidden) { backToSidebar(); return; }
             if (!isDesktop && returnListId) {
@@ -483,11 +506,13 @@ function App() {
         {openList ? (
           <ListDetail
             list={openList}
-            places={places.filter(p => p.list_id === openList.id)}
+            places={places.filter(p => (p.list_ids || []).includes(openList.id))}
+          todasListas={lists}
             home={home}
             onBack={() => setOpenListId(null)}
             onOpen={goToPlace}
             onRemove={removePlace}
+            onRemoveFromList={removePlaceFromList}
             onShare={() => shareList(openList)}
             onSavePlace={savePlaceEdits}
             onAddPhoto={addPhoto}
