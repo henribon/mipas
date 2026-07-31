@@ -232,6 +232,31 @@ window.Mipas = window.Mipas || {};
     if (error) throw error;
   }
 
+  async function fetchWishes() {
+    const { data, error } = await client.from('wish_places').select('*').order('created_at');
+    if (error) throw error;
+    return data;
+  }
+
+  async function createWish({ name, address, latitude, longitude, instagram, note }) {
+    const { data, error } = await client.from('wish_places')
+      .insert({ name, address, latitude, longitude, instagram, note })
+      .select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function updateWish(id, patch) {
+    const { data, error } = await client.from('wish_places').update(patch).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function deleteWish(id) {
+    const { error } = await client.from('wish_places').delete().eq('id', id);
+    if (error) throw error;
+  }
+
   async function fetchHome() {
     const { data, error } = await client.from('user_home').select('*').maybeSingle();
     if (error) throw error;
@@ -258,5 +283,6 @@ window.Mipas = window.Mipas || {};
     fetchHome, saveHome, clearHome,
     uploadPhoto, updatePhoto, deletePhoto, reorderPhotos,
     setPlaceLists,
+    fetchWishes, createWish, updateWish, deleteWish,
   };
 })();

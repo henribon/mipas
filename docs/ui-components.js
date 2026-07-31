@@ -545,6 +545,104 @@ function PlaceCard({ place, list, onClose }) {
   );
 }
 
+function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
+  const C = window.Mipas.theme;
+  const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+  const canSave = draft.name.trim() && !saving;
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 850 }}>
+      <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
+      <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', maxHeight: '86%', overflow: 'auto', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
+        <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
+        <div style={{ fontFamily: 'Inter', fontSize: 19, fontWeight: 700, color: C.ink }}>Quero ir aqui</div>
+        <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 3, lineHeight: 1.4 }}>{draft.address}</div>
+
+        <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Nome do lugar</div>
+        <input autoFocus value={draft.name} onChange={e => set('name', e.target.value)} placeholder='Ex: "Aquele japonês do centro"'
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Instagram <span style={{ color: C.sub, fontWeight: 500 }}>(opcional)</span></div>
+        <input value={draft.instagram || ''} onChange={e => set('instagram', e.target.value)} placeholder="@dolugar"
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Por que quer ir? <span style={{ color: C.sub, fontWeight: 500 }}>(opcional)</span></div>
+        <textarea value={draft.note || ''} onChange={e => set('note', e.target.value)} rows={2} placeholder="Quem indicou, o que querem provar…"
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500, color: C.ink, resize: 'none' }} />
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
+          <Btn primary disabled={!canSave} onClick={onSave} style={{ flex: 2 }}>{saving ? 'Guardando…' : 'Guardar desejo'}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
+  const C = window.Mipas.theme;
+  const isPanel = variant === 'panel';
+
+  const comDistancia = (wishes || []).map(w => ({
+    ...w,
+    distanceKm: (home && w.latitude != null && w.longitude != null)
+      ? window.Mipas.haversineKm(home.latitude, home.longitude, w.latitude, w.longitude)
+      : null,
+  }));
+
+  return (
+    <div style={isPanel
+      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
+      : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
+      {!isPanel && onBack && (
+        <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Voltar</button>
+      )}
+      <div className="section-title" style={{ fontFamily: 'Inter', fontSize: isPanel ? 20 : 24, fontWeight: 700, color: C.ink }}>Quero ir</div>
+      <div style={{ color: C.sub, fontWeight: 600, fontSize: 13, marginTop: 2 }}>
+        {comDistancia.length === 0 ? 'nenhum lugar na fila ainda' : `${comDistancia.length} ${comDistancia.length === 1 ? 'lugar na fila' : 'lugares na fila'}`}
+      </div>
+      <div style={{ color: C.sub, fontWeight: 500, fontSize: 12, marginTop: 6, lineHeight: 1.4 }}>
+        Só você vê esta aba, e estes lugares não aparecem no mapa.
+      </div>
+
+      <button onClick={onNew} style={{
+        width: '100%', boxSizing: 'border-box', marginTop: 14, border: `2px dashed ${C.coral}66`, background: 'none',
+        borderRadius: 14, padding: '14px', fontFamily: 'Inter', fontWeight: 700, fontSize: 14.5, color: C.coral, cursor: 'pointer',
+      }}>+ Quero ir num lugar novo</button>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+        {comDistancia.map(w => (
+          <div key={w.id} style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.line}`, padding: '12px 14px' }}>
+            <div style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.ink }}>{w.name}</div>
+            <div style={{ marginTop: 3 }}>
+              <AddressLink place={w} fontSize={12.5} />
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 9 }}>
+              {w.distanceKm != null && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '4px 10px' }}>
+                  {w.distanceKm < 1 ? `${Math.round(w.distanceKm * 1000)} m` : `${w.distanceKm.toFixed(1)} km`}
+                </div>
+              )}
+              {w.instagram && <InstagramButton handle={w.instagram} />}
+            </div>
+            {w.note && (
+              <div style={{ marginTop: 9, fontSize: 12.5, fontWeight: 500, color: C.sub, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{w.note}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
+              <button onClick={() => onFui(w)} style={{
+                border: 'none', borderRadius: 10, padding: '9px 20px', fontFamily: 'Inter', fontWeight: 800, fontSize: 13,
+                background: C.coral, color: '#fff', cursor: 'pointer', letterSpacing: .4,
+              }}>FUI!</button>
+              <span style={{ fontSize: 11.5, fontWeight: 500, color: C.sub }}>vira um lugar numa lista</span>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => onRemove(w)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px' }}>Excluir</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, variant }) {
   const C = window.Mipas.theme;
   const isPanel = variant === 'panel';
@@ -1233,4 +1331,4 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
   );
 }
 
-Object.assign(window, { Btn, SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, gradientForPlace });
+Object.assign(window, { Btn, SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, gradientForPlace });

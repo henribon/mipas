@@ -534,3 +534,46 @@ revoke select on public.place_lists from anon;
 grant select (place_id, list_id) on public.place_lists to anon;
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- Migração incremental (2026-07-30b) — "Quero ir".
+-- Lista de desejos: lugares que o dono ainda não visitou. Não entram no mapa
+-- nem em lista nenhuma, e são estritamente privados — como user_home, não
+-- existe policy pra anon aqui. Ao marcar "Fui", o registro vira um place
+-- normal e a linha some daqui.
+-- Idempotente: pode rodar de novo sem erro.
+-- ---------------------------------------------------------
+
+create table if not exists public.wish_places (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name        text not null,
+  address     text not null,
+  latitude    double precision,
+  longitude   double precision,
+  instagram   text,
+  note        text,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists idx_wish_places_owner_id on public.wish_places(owner_id);
+
+alter table public.wish_places enable row level security;
+
+drop policy if exists "owner can read own wishes" on public.wish_places;
+create policy "owner can read own wishes" on public.wish_places
+  for select to authenticated using (auth.uid() = owner_id);
+
+drop policy if exists "owner can insert own wishes" on public.wish_places;
+create policy "owner can insert own wishes" on public.wish_places
+  for insert to authenticated with check (auth.uid() = owner_id);
+
+drop policy if exists "owner can update own wishes" on public.wish_places;
+create policy "owner can update own wishes" on public.wish_places
+  for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+
+drop policy if exists "owner can delete own wishes" on public.wish_places;
+create policy "owner can delete own wishes" on public.wish_places
+  for delete to authenticated using (auth.uid() = owner_id);
+
+notify pgrst, 'reload schema';

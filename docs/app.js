@@ -15,6 +15,10 @@ function App() {
   const [lists, setLists] = useState([]);
   const [places, setPlaces] = useState([]);
   const [home, setHome] = useState(null);
+  const [wishes, setWishes] = useState([]);
+  const [wishDraft, setWishDraft] = useState(null);
+  const [savingWish, setSavingWish] = useState(false);
+  const [searchTarget, setSearchTarget] = useState('place');
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -75,8 +79,9 @@ function App() {
   }, [authReady, session]);
 
   useEffect(() => {
-    if (!canEdit) { setHome(null); return; }
+    if (!canEdit) { setHome(null); setWishes([]); return; }
     data.fetchHome().then(setHome).catch(() => setHome(null));
+    data.fetchWishes().then(setWishes).catch(() => setWishes([]));
   }, [canEdit]);
 
   useEffect(() => {
@@ -182,10 +187,19 @@ function App() {
         }
       }
       setPlaces(ps => [...ps, comFotos]);
+      if (d.wish_id) {
+        try {
+          await data.deleteWish(d.wish_id);
+          setWishes(ws => ws.filter(w => w.id !== d.wish_id));
+        } catch (err) {
+          alert('O lugar foi guardado, mas ele continua no Quero ir.');
+        }
+      }
       setDraft(null);
       setSearchOpen(false);
       setQuery('');
       setResults([]);
+      setTab('map');
       setTimeout(() => {
         leafRef.current.flyTo([created.latitude, created.longitude], 15, { duration: .9 });
         setSelId(created.id);
@@ -228,6 +242,56 @@ function App() {
     } catch (e) {
       alert('Não deu pra excluir.');
     }
+  };
+
+  const saveWish = async () => {
+    setSavingWish(true);
+    try {
+      const criado = await data.createWish({
+        name: wishDraft.name.trim(),
+        address: wishDraft.address,
+        latitude: wishDraft.lat,
+        longitude: wishDraft.lng,
+        instagram: wishDraft.instagram?.trim().replace(/^@/, '') || null,
+        note: wishDraft.note?.trim() || null,
+      });
+      setWishes(ws => [...ws, criado]);
+      setWishDraft(null);
+      setSearchOpen(false);
+      setQuery('');
+      setResults([]);
+    } catch (e) {
+      alert('Não deu pra guardar esse desejo.');
+    } finally {
+      setSavingWish(false);
+    }
+  };
+
+  const removeWish = async (w) => {
+    if (!confirm(`Tirar "${w.name}" do Quero ir?`)) return;
+    try {
+      await data.deleteWish(w.id);
+      setWishes(ws => ws.filter(x => x.id !== w.id));
+    } catch (e) {
+      alert('Não deu pra excluir.');
+    }
+  };
+
+  const marcarFui = (w) => {
+    setDraft({
+      address: w.address,
+      lat: w.latitude,
+      lng: w.longitude,
+      name: w.name,
+      category: '',
+      rating: '',
+      description: '',
+      avg_price: '',
+      instagram: w.instagram || '',
+      photos: [],
+      list_ids: [],
+      wish_id: w.id,
+    });
   };
 
   const removePlaceFromList = async (lugar, listId) => {
@@ -399,7 +463,7 @@ function App() {
       )}
 
       {(isDesktop || tab === 'map') && !searchOpen && canEdit && (
-        <div onClick={() => setSearchOpen(true)} style={{
+        <div onClick={() => { setSearchTarget('place'); setSearchOpen(true); }} style={{
           position: 'absolute', top: 66, left: 16, right: 90, zIndex: 500, cursor: 'pointer',
           background: C.surface, borderRadius: 999, padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 10,
           border: `1.5px solid ${C.line}`,
@@ -421,8 +485,14 @@ function App() {
           <div style={{ flex: 1, overflow: 'auto', padding: '4px 16px 20px' }}>
             {!query.trim() && (
               <div style={{ textAlign: 'center', marginTop: 90, color: C.sub }}>
-                <div style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: C.ink, marginTop: 10 }}>Ache um lugar novo</div>
-                <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 6, lineHeight: 1.5 }}>Busque qualquer endereço,<br />dê um nome só seu e guarde numa lista.</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: C.ink, marginTop: 10 }}>
+                  {searchTarget === 'wish' ? 'Um lugar pra ir um dia' : 'Ache um lugar novo'}
+                </div>
+                <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 6, lineHeight: 1.5 }}>
+                  {searchTarget === 'wish'
+                    ? <React.Fragment>Busque o endereço e guarde na fila.<br />Só você vê, e não entra no mapa.</React.Fragment>
+                    : <React.Fragment>Busque qualquer endereço,<br />dê um nome só seu e guarde numa lista.</React.Fragment>}
+                </div>
               </div>
             )}
             {searching && <div style={{ textAlign: 'center', marginTop: 40, color: C.sub, fontWeight: 600 }}>Buscando…</div>}
@@ -430,7 +500,9 @@ function App() {
               <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
             )}
             {results.map((r, i) => (
-              <div key={i} onClick={() => setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', photos: [], list_ids: openListId && lists.some(l => l.id === openListId) ? [openListId] : (lists[0] ? [lists[0].id] : []) })}
+              <div key={i} onClick={() => (searchTarget === 'wish'
+                ? setWishDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', instagram: '', note: '' })
+                : setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', photos: [], list_ids: openListId && lists.some(l => l.id === openListId) ? [openListId] : (lists[0] ? [lists[0].id] : []) }))}
                 style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
@@ -449,6 +521,18 @@ function App() {
           canEdit={canEdit}
           onOpenList={setOpenListId}
           onNewList={() => setNewListOpen(true)}
+          onBack={() => setTab('map')}
+          variant="overlay"
+        />
+      )}
+
+      {!isDesktop && tab === 'wish' && canEdit && (
+        <WishPanel
+          wishes={wishes}
+          home={home}
+          onNew={() => { setSearchTarget('wish'); setSearchOpen(true); }}
+          onFui={marcarFui}
+          onRemove={removeWish}
           onBack={() => setTab('map')}
           variant="overlay"
         />
@@ -477,7 +561,7 @@ function App() {
 
       {!isDesktop && !searchOpen && !draft && (
         <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', zIndex: 700, display: 'flex', gap: 4, background: C.glass, backdropFilter: 'blur(14px)', borderRadius: 999, padding: 5, border: `1.5px solid ${C.line}` }}>
-          {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => (
+          {[['map', 'Mapa'], ['lists', 'Listas'], ...(canEdit ? [['wish', 'Quero ir']] : [])].map(([k, lb]) => (
             <button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} style={{
               border: 'none', cursor: 'pointer', borderRadius: 999, padding: '10px 26px',
               fontFamily: 'Inter', fontWeight: 700, fontSize: 14,
@@ -502,8 +586,31 @@ function App() {
     </div>
 
     {isDesktop && !sidebarHidden && (
-      <div style={{ width: 380, flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden' }}>
-        {openList ? (
+      <div style={{ width: 380, flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {canEdit && !openList && (
+          <div style={{ display: 'flex', gap: 6, padding: '14px 20px 0', flexShrink: 0 }}>
+            {[['lists', 'Listas'], ['wish', 'Quero ir']].map(([k, lb]) => {
+              const ativa = k === 'wish' ? tab === 'wish' : tab !== 'wish';
+              return (
+                <button key={k} onClick={() => setTab(k)} style={{
+                  border: `1.5px solid ${ativa ? C.coral : C.line}`, borderRadius: 999, padding: '6px 14px', cursor: 'pointer',
+                  fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5,
+                  background: ativa ? C.coral + '22' : C.surface, color: ativa ? C.coral : C.sub,
+                }}>{lb}</button>
+              );
+            })}
+          </div>
+        )}
+        {!openList && tab === 'wish' && canEdit ? (
+          <WishPanel
+            wishes={wishes}
+            home={home}
+            onNew={() => { setSearchTarget('wish'); setSearchOpen(true); }}
+            onFui={marcarFui}
+            onRemove={removeWish}
+            variant="panel"
+          />
+        ) : openList ? (
           <ListDetail
             list={openList}
             places={places.filter(p => (p.list_ids || []).includes(openList.id))}
@@ -544,6 +651,16 @@ function App() {
           onNewList={() => { setPendingListPick(true); setNewListOpen(true); }}
           onCancel={() => setDraft(null)}
           onSave={() => savePlace(draft)}
+        />
+      )}
+
+      {wishDraft && (
+        <WishSheet
+          draft={wishDraft}
+          setDraft={setWishDraft}
+          saving={savingWish}
+          onCancel={() => setWishDraft(null)}
+          onSave={saveWish}
         />
       )}
 
