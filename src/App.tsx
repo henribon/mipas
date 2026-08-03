@@ -463,7 +463,7 @@ export default function App() {
           readOnly
           onClick={() => { setSearchTarget('place'); setSearchOpen(true); }}
           placeholder="Buscar um endereço pra guardar…"
-          className="absolute top-[66px] left-4 right-[90px] z-[500] border border-line shadow-sm"
+          className="absolute top-[66px] left-4 right-[90px] z-[500]"
         />
       )}
 
@@ -477,7 +477,7 @@ export default function App() {
               onSubmit={() => debouncedSearch(query)}
               botao="Buscar"
               placeholder="Rua, praça, avenida…"
-              className="flex-1 min-w-0 border border-line shadow-sm"
+              className="flex-1 min-w-0"
             />
             <Button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} variant="plain" size="sm">Cancelar</Button>
           </div>

@@ -26,6 +26,8 @@
   --line: rgba(165, 179, 192, 0.28);
   --glass: rgba(15, 18, 21, 0.92);
   --fade: linear-gradient(rgba(15, 18, 21, 0.9), rgba(15, 18, 21, 0));
+  --busca-brilho: rgba(136, 153, 170, 0.35);
+  --busca-halo: rgba(21, 25, 30, 0.55);
 }
 
 body.light {
@@ -38,6 +40,8 @@ body.light {
   --line: rgba(63, 76, 90, 0.22);
   --glass: rgba(240, 242, 244, 0.92);
   --fade: linear-gradient(rgba(240, 242, 244, 0.9), rgba(240, 242, 244, 0));
+  --busca-brilho: rgba(106, 127, 149, 0.3);
+  --busca-halo: rgba(240, 242, 244, 0.92);
 }
 
 @theme inline {
