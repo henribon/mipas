@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom';
 import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
 import * as data from '@/data';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export const computeRanks = function (places) {
   const comNota = (places || []).filter(p => p.rating != null)
@@ -178,15 +180,19 @@ function RichTextEditor({ value, onChange, placeholder, minHeight }) {
   );
 }
 
-function Btn({ children, onClick, primary, style, disabled }) {
-  const C = getTheme();
+function Btn({ children, onClick, primary, style, disabled, icon, tooltip, className }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      border: 'none', cursor: disabled ? 'default' : 'pointer', borderRadius: 12, padding: '14px 18px',
-      fontFamily: 'Inter', fontSize: 15, fontWeight: 700,
-      background: primary ? C.coral : C.cream, color: primary ? '#fff' : C.ink,
-      opacity: disabled ? .5 : 1, ...style,
-    }}>{children}</button>
+    <Button
+      onClick={onClick}
+      disabled={disabled}
+      icon={icon}
+      tooltip={tooltip}
+      variant={primary ? 'primary' : 'secondary'}
+      className={cn('px-6 py-3.5 text-[15px]', className)}
+      style={style}
+    >
+      {children}
+    </Button>
   );
 }
 
