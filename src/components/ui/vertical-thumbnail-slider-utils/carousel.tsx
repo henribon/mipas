@@ -125,8 +125,6 @@ export function Carousel({
   );
 }
 
-let contadorSlide = 0;
-
 export function SliderContainer({
   children,
   className,
@@ -135,13 +133,18 @@ export function SliderContainer({
   className?: string;
 }) {
   const { emblaRef, eixo } = usarCarousel();
-  contadorSlide = 0;
   // A altura precisa estar na viewport (o elemento da ref): é o recorte dela
   // que o Embla rola. Deixando só no contêiner interno, não há transbordo e
   // o carrossel fica parado.
   return (
     <div className={cn('overflow-hidden', className)} ref={emblaRef}>
-      <div className={cn('flex h-full', eixo === 'y' && 'flex-col', className)}>{children}</div>
+      <div className={cn('flex h-full', eixo === 'y' && 'flex-col', className)}>
+        {React.Children.map(children, (filho, i) =>
+          React.isValidElement(filho)
+            ? React.cloneElement(filho as React.ReactElement<any>, { indiceDoSlide: i })
+            : filho,
+        )}
+      </div>
     </div>
   );
 }
@@ -150,17 +153,18 @@ export function Slider({
   children,
   className,
   thumbnailSrc,
+  indiceDoSlide = 0,
 }: {
   children: ReactNode;
   className?: string;
   thumbnailSrc?: string;
+  indiceDoSlide?: number;
 }) {
   const { registrar } = usarCarousel();
-  const [indice] = useState(() => contadorSlide++);
 
   useEffect(() => {
-    if (thumbnailSrc) registrar({ indice, src: thumbnailSrc });
-  }, [indice, thumbnailSrc, registrar]);
+    if (thumbnailSrc) registrar({ indice: indiceDoSlide, src: thumbnailSrc });
+  }, [indiceDoSlide, thumbnailSrc, registrar]);
 
   return <div className={cn('min-w-0 shrink-0 grow-0 basis-full', className)}>{children}</div>;
 }
@@ -183,6 +187,8 @@ export function ThumbsSlider({
           <button
             key={m.indice}
             type="button"
+            data-indice={m.indice}
+            aria-label={`Ver foto ${m.indice + 1}`}
             onClick={() => irPara(m.indice)}
             className={cn(
               'relative shrink-0 grow-0 overflow-hidden rounded-lg border-2 transition',
