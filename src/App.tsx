@@ -1,10 +1,14 @@
-window.Mipas = window.Mipas || {};
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getTheme, setTheme, initialTheme } from '@/theme';
+import * as data from '@/data';
+import * as mapa from '@/map';
+import { auth, LoginForm } from '@/auth';
+import { debounce, geocodeAddress, haversineKm } from '@/geocoding';
+import { SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet } from '@/components/mipas';
 
-function App() {
-  const { useState, useEffect, useRef, useMemo } = React;
-  const C = window.Mipas.theme;
-  const data = window.Mipas.data;
-
+export default function App() {
+  const C = getTheme();
+  
   const sharedListId = useMemo(() => new URLSearchParams(window.location.search).get('list'), []);
   const sharedMode = !!sharedListId;
 
@@ -42,7 +46,7 @@ function App() {
 
   const toggleTheme = () => {
     const next = themeMode === 'dark' ? 'light' : 'dark';
-    window.Mipas.setTheme(next);
+    setTheme(next);
     setThemeMode(next);
   };
 
@@ -53,8 +57,8 @@ function App() {
   const canEdit = !sharedMode && !!session;
 
   useEffect(() => {
-    window.Mipas.auth.getSession().then(s => { setSession(s); setAuthReady(true); });
-    const sub = window.Mipas.auth.onChange(s => setSession(s));
+    auth.getSession().then(s => { setSession(s); setAuthReady(true); });
+    const sub = auth.onChange(s => setSession(s));
     return () => sub.unsubscribe();
   }, []);
 
@@ -85,7 +89,7 @@ function App() {
   }, [canEdit]);
 
   useEffect(() => {
-    const m = window.Mipas.map.initMap(mapRef.current);
+    const m = mapa.initMap(mapRef.current);
     leafRef.current = m;
     m.on('click', () => { setSelId(null); setReturnListId(null); });
     setTimeout(() => m.invalidateSize(), 300);
@@ -106,7 +110,7 @@ function App() {
   useEffect(() => {
     const m = leafRef.current;
     if (!m) return;
-    window.Mipas.map.syncMarkers(m, markersRef, places, lists, (p) => {
+    mapa.syncMarkers(m, markersRef, places, lists, (p) => {
       setSelId(p.id);
       setTab('map');
       setOpenListId(null);
@@ -123,11 +127,11 @@ function App() {
     setTimeout(() => m.flyTo([first.latitude, first.longitude], 13, { duration: .6 }), 200);
   }, [sharedMode, places]);
 
-  const debouncedSearch = useMemo(() => window.Mipas.debounce(async (q) => {
+  const debouncedSearch = useMemo(() => debounce(async (q) => {
     if (!q.trim()) { setResults([]); return; }
     setSearching(true);
     try {
-      setResults(await window.Mipas.geocodeAddress(q));
+      setResults(await geocodeAddress(q));
     } catch (e) {
       setResults([]);
     } finally {
@@ -397,7 +401,7 @@ function App() {
   };
 
   const handleAuthButtonClick = () => {
-    if (canEdit) window.Mipas.auth.signOut();
+    if (canEdit) auth.signOut();
     else setLoginOpen(true);
   };
 
@@ -686,4 +690,3 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);

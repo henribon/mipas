@@ -1,6 +1,10 @@
-window.Mipas = window.Mipas || {};
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
+import { getTheme, listColors } from '@/theme';
+import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
+import * as data from '@/data';
 
-window.Mipas.computeRanks = function (places) {
+export const computeRanks = function (places) {
   const comNota = (places || []).filter(p => p.rating != null)
     .sort((a, b) => (b.rating - a.rating) || String(a.name).localeCompare(String(b.name), 'pt-BR'));
   const ranks = {};
@@ -34,7 +38,7 @@ const RICH_FONTS = [
 ];
 const normalizaFonte = (v) => String(v || '').replace(/["']/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
-window.Mipas.sanitizeRichHtml = function (html) {
+export const sanitizeRichHtml = function (html) {
   if (!html) return '';
   const doc = new DOMParser().parseFromString('<div id="raiz"></div>', 'text/html');
   const root = doc.getElementById('raiz');
@@ -87,12 +91,11 @@ window.Mipas.sanitizeRichHtml = function (html) {
 function RichText({ html, style }) {
   const temTag = /<[a-z][\s\S]*>/i.test(html || '');
   if (!temTag) return <div style={{ whiteSpace: 'pre-wrap', ...style }}>{html}</div>;
-  return <div style={style} dangerouslySetInnerHTML={{ __html: window.Mipas.sanitizeRichHtml(html) }} />;
+  return <div style={style} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }} />;
 }
 
 function RichTextEditor({ value, onChange, placeholder, minHeight }) {
-  const { useRef, useEffect } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const ref = useRef(null);
   const [vazio, setVazio] = React.useState(!value);
 
@@ -126,7 +129,7 @@ function RichTextEditor({ value, onChange, placeholder, minHeight }) {
     if (!ref.current) return;
     const html = ref.current.innerHTML;
     setVazio(!ref.current.textContent.trim() && !/<img/i.test(html));
-    onChange(window.Mipas.sanitizeRichHtml(html));
+    onChange(sanitizeRichHtml(html));
   };
 
   const botao = (rotulo, aoClicar, estilo) => (
@@ -176,7 +179,7 @@ function RichTextEditor({ value, onChange, placeholder, minHeight }) {
 }
 
 function Btn({ children, onClick, primary, style, disabled }) {
-  const C = window.Mipas.theme;
+  const C = getTheme();
   return (
     <button onClick={onClick} disabled={disabled} style={{
       border: 'none', cursor: disabled ? 'default' : 'pointer', borderRadius: 12, padding: '14px 18px',
@@ -188,8 +191,7 @@ function Btn({ children, onClick, primary, style, disabled }) {
 }
 
 function DraftPhotos({ photos, onChange }) {
-  const { useRef } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const inputRef = useRef(null);
 
   const escolher = (ev) => {
@@ -227,8 +229,7 @@ function DraftPhotos({ photos, onChange }) {
 }
 
 function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto }) {
-  const { useState } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const [busca, setBusca] = useState('');
   const termo = busca.trim().toLowerCase();
   const filtradas = termo ? lists.filter(l => l.name.toLowerCase().includes(termo)) : lists;
@@ -285,7 +286,7 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto }) {
 }
 
 function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving }) {
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const listIds = draft.list_ids || [];
   const alternaLista = (id) => set('list_ids', listIds.includes(id) ? listIds.filter(x => x !== id) : [...listIds, id]);
@@ -337,11 +338,10 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
 }
 
 function NewListSheet({ onCancel, onCreate, creating }) {
-  const { useState } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('📍');
-  const [color, setColor] = useState(window.Mipas.listColors[0]);
+  const [color, setColor] = useState(listColors[0]);
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 900 }}>
       <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
@@ -361,7 +361,7 @@ function NewListSheet({ onCancel, onCreate, creating }) {
         </div>
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Cor</div>
         <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-          {window.Mipas.listColors.map(c => (
+          {listColors.map(c => (
             <button key={c} onClick={() => setColor(c)} style={{
               width: 32, height: 32, borderRadius: 99, background: c, cursor: 'pointer',
               border: `3px solid ${color === c ? C.ink : C.surface}`,
@@ -378,8 +378,7 @@ function NewListSheet({ onCancel, onCreate, creating }) {
 }
 
 function HomeSheet({ home, onCancel, onSave, onClear }) {
-  const { useState, useMemo } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -387,11 +386,11 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState('');
 
-  const debouncedSearch = useMemo(() => window.Mipas.debounce(async (q) => {
+  const debouncedSearch = useMemo(() => debounce(async (q) => {
     if (!q.trim()) { setResults([]); return; }
     setSearching(true);
     try {
-      setResults(await window.Mipas.geocodeAddress(q));
+      setResults(await geocodeAddress(q));
     } catch (e) {
       setResults([]);
     } finally {
@@ -466,7 +465,7 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
 }
 
 function AddressLink({ place, fontSize }) {
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const query = encodeURIComponent(`${place.name}, ${place.address}`);
   return (
     <a href={`https://www.google.com/maps/search/?api=1&query=${query}`}
@@ -475,7 +474,7 @@ function AddressLink({ place, fontSize }) {
       style={{ color: C.sub, fontWeight: 500, fontSize, textDecoration: 'none', cursor: 'pointer' }}
       onMouseEnter={e => { e.target.style.textDecoration = 'underline'; }}
       onMouseLeave={e => { e.target.style.textDecoration = 'none'; }}>
-      {window.Mipas.shortAddress(place.address)} ↗
+      {shortAddress(place.address)} ↗
     </a>
   );
 }
@@ -499,8 +498,7 @@ function InstagramButton({ handle }) {
 }
 
 function PlaceCard({ place, list, onClose }) {
-  const { useState } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const [openId, setOpenId] = useState(null);
   const photos = place.photos || [];
   return (
@@ -546,7 +544,7 @@ function PlaceCard({ place, list, onClose }) {
 }
 
 function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const canSave = draft.name.trim() && !saving;
   return (
@@ -579,13 +577,13 @@ function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
 }
 
 function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const isPanel = variant === 'panel';
 
   const comDistancia = (wishes || []).map(w => ({
     ...w,
     distanceKm: (home && w.latitude != null && w.longitude != null)
-      ? window.Mipas.haversineKm(home.latitude, home.longitude, w.latitude, w.longitude)
+      ? haversineKm(home.latitude, home.longitude, w.latitude, w.longitude)
       : null,
   }));
 
@@ -644,7 +642,7 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
 }
 
 function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, variant }) {
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const isPanel = variant === 'panel';
   return (
     <div style={isPanel
@@ -684,8 +682,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
 }
 
 function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReorder }) {
-  const { useRef, useState, useEffect } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const inputRef = useRef(null);
   const pendingTitleRef = useRef(null);
   const [openId, setOpenId] = useState(null);
@@ -848,10 +845,9 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
 }
 
 function PhotoLightbox({ photos, openId, onSetId, onClose }) {
-  const { useEffect, useState, useRef } = React;
   const [dx, setDx] = useState(0);
   const arrasto = useRef({ x0: 0, ativo: false });
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const idx = Math.max(0, photos.findIndex(p => p.id === openId));
   const ph = photos[idx];
   const go = (delta) => {
@@ -957,8 +953,7 @@ const NUMERIC_SORT_ACCESSORS = {
 };
 
 function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos }) {
-  const { useState, useEffect, useMemo, useRef } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
 
   const fromPlace = () => ({
     description: p.description ?? '',
@@ -1173,8 +1168,7 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
 }
 
 function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onToggleRanking, canEdit, variant }) {
-  const { useState, useMemo, useEffect } = React;
-  const C = window.Mipas.theme;
+  const C = getTheme();
   const isPanel = variant === 'panel';
   const [expandedId, setExpandedId] = useState(null);
   const [sortBy, setSortBy] = useState('padrao');
@@ -1200,10 +1194,10 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
 
   const withDistance = useMemo(() => places.map(p => ({
     ...p,
-    distanceKm: home ? window.Mipas.haversineKm(home.latitude, home.longitude, p.latitude, p.longitude) : null,
+    distanceKm: home ? haversineKm(home.latitude, home.longitude, p.latitude, p.longitude) : null,
   })), [places, home]);
 
-  const ranks = useMemo(() => window.Mipas.computeRanks(places), [places]);
+  const ranks = useMemo(() => computeRanks(places), [places]);
 
   const sortedPlaces = useMemo(() => {
     if (sortBy === 'padrao') return withDistance;
@@ -1331,4 +1325,16 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
   );
 }
 
-Object.assign(window, { Btn, SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, gradientForPlace });
+
+export {
+  Btn,
+  SaveSheet,
+  NewListSheet,
+  HomeSheet,
+  PlaceCard,
+  ListsPanel,
+  ListDetail,
+  WishPanel,
+  WishSheet,
+  gradientForPlace,
+};

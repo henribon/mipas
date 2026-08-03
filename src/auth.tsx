@@ -1,27 +1,28 @@
-window.Mipas = window.Mipas || {};
+import { useState } from 'react';
+import { supabase } from '@/data';
+import { getTheme } from '@/theme';
 
-window.Mipas.auth = {
+export const auth = {
   async signIn(email, password) {
-    const { data, error } = await window.Mipas.supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data.session;
   },
   async signOut() {
-    await window.Mipas.supabase.auth.signOut();
+    await supabase.auth.signOut();
   },
   async getSession() {
-    const { data } = await window.Mipas.supabase.auth.getSession();
+    const { data } = await supabase.auth.getSession();
     return data.session;
   },
   onChange(callback) {
-    const { data } = window.Mipas.supabase.auth.onAuthStateChange((_event, session) => callback(session));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
     return data.subscription;
   },
 };
 
-function LoginForm({ onCancel }) {
-  const { useState } = React;
-  const C = window.Mipas.theme;
+export function LoginForm({ onCancel }: { onCancel: () => void }) {
+  const C = getTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -32,7 +33,7 @@ function LoginForm({ onCancel }) {
     setLoading(true);
     setError('');
     try {
-      await window.Mipas.auth.signIn(email, password);
+      await auth.signIn(email, password);
       onCancel();
     } catch (e) {
       setError('Email ou senha incorretos.');
@@ -63,5 +64,3 @@ function LoginForm({ onCancel }) {
     </div>
   );
 }
-
-Object.assign(window, { LoginForm });
