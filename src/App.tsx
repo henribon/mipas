@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { SearchBar } from '@/components/ui/search-bar';
 import { cn } from '@/lib/utils';
 import { getTheme, setTheme, initialTheme } from '@/theme';
 import * as data from '@/data';
@@ -458,23 +459,26 @@ export default function App() {
       )}
 
       {(isDesktop || tab === 'map') && !searchOpen && canEdit && (
-        <div onClick={() => { setSearchTarget('place'); setSearchOpen(true); }} style={{
-          position: 'absolute', top: 66, left: 16, right: 90, zIndex: 500, cursor: 'pointer',
-          background: C.surface, borderRadius: 999, padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 10,
-          border: `1.5px solid ${C.line}`,
-        }}>
-          <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="7.5" cy="7.5" r="5.5" fill="none" stroke={C.coral} strokeWidth="2.2" /><line x1="12" y1="12" x2="16" y2="16" stroke={C.coral} strokeWidth="2.2" strokeLinecap="round" /></svg>
-          <span style={{ color: C.sub, fontSize: 15, fontWeight: 600 }}>Buscar um endereço pra guardar…</span>
-        </div>
+        <SearchBar
+          readOnly
+          onClick={() => { setSearchTarget('place'); setSearchOpen(true); }}
+          placeholder="Buscar um endereço pra guardar…"
+          className="absolute top-[66px] left-4 right-[90px] z-[500] border border-line shadow-sm"
+        />
       )}
 
       {searchOpen && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 800, background: C.paper, display: 'flex', flexDirection: 'column', animation: 'fadeIn .15s' }}>
           <div style={{ padding: '66px 16px 10px', display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div style={{ flex: 1, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 999, padding: '12px 18px', display: 'flex', gap: 10, alignItems: 'center' }}>
-              <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="7.5" cy="7.5" r="5.5" fill="none" stroke={C.coral} strokeWidth="2.2" /><line x1="12" y1="12" x2="16" y2="16" stroke={C.coral} strokeWidth="2.2" strokeLinecap="round" /></svg>
-              <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Rua, praça, avenida…" style={{ border: 'none', background: 'none', fontSize: 15, fontWeight: 600, color: C.ink, width: '100%' }} />
-            </div>
+            <SearchBar
+              autoFocus
+              value={query}
+              onChange={setQuery}
+              onSubmit={() => debouncedSearch(query)}
+              botao="Buscar"
+              placeholder="Rua, praça, avenida…"
+              className="flex-1 min-w-0 border border-line shadow-sm"
+            />
             <Button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} variant="plain" size="sm">Cancelar</Button>
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '4px 16px 20px' }}>

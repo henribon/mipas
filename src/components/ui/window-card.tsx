@@ -25,7 +25,7 @@ export function WindowCard({
       onClick={onClick}
       style={style}
       className={cn(
-        'rounded-lg neon-borda [--neon-fill:var(--surface)]',
+        'bg-surface rounded-lg overflow-hidden border border-line',
         onClick && 'cursor-pointer',
         className,
       )}
@@ -36,7 +36,7 @@ export function WindowCard({
           {actions && <span className="ml-auto flex items-center gap-1">{actions}</span>}
         </div>
       )}
-      <div className={cn('card__content overflow-hidden rounded-[inherit]', bodyClassName)}>{children}</div>
+      <div className={cn('card__content', bodyClassName)}>{children}</div>
     </div>
   );
 }
