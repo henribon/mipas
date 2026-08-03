@@ -4,6 +4,7 @@ import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
 import * as data from '@/data';
 import { Button } from '@/components/ui/button';
+import VerticalthumbsSlider from '@/components/ui/vertical-thumbnail-slider';
 import { WindowCard } from '@/components/ui/window-card';
 import { cn } from '@/lib/utils';
 
@@ -814,93 +815,31 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
 }
 
 function PhotoLightbox({ photos, openId, onSetId, onClose }) {
-  const [dx, setDx] = useState(0);
-  const arrasto = useRef({ x0: 0, ativo: false });
-  const C = getTheme();
   const idx = Math.max(0, photos.findIndex(p => p.id === openId));
   const ph = photos[idx];
-  const go = (delta) => {
-    const next = photos[(idx + delta + photos.length) % photos.length];
-    if (next) onSetId(next.id);
-  };
 
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') go(1);
-      if (e.key === 'ArrowLeft') go(-1);
-    };
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [idx, photos.length]);
+  }, [onClose]);
 
   if (!ph) return null;
 
-  const LIMIAR = 60;
-  const aoArrastarInicio = (ev) => {
-    if (photos.length < 2) return;
-    arrasto.current = { x0: ev.clientX, ativo: true };
-    ev.currentTarget.setPointerCapture(ev.pointerId);
-  };
-  const aoArrastar = (ev) => {
-    if (!arrasto.current.ativo) return;
-    setDx(ev.clientX - arrasto.current.x0);
-  };
-  const aoArrastarFim = () => {
-    if (!arrasto.current.ativo) return;
-    const d = dx;
-    arrasto.current.ativo = false;
-    setDx(0);
-    if (Math.abs(d) > LIMIAR) go(d < 0 ? 1 : -1);
-  };
-
-  const arrow = (dir, glyph) => (
-    <button onClick={ev => { ev.stopPropagation(); go(dir); }} style={{
-      position: 'absolute', top: '50%', transform: 'translateY(-50%)', [dir < 0 ? 'left' : 'right']: 14,
-      width: 40, height: 40, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.55)',
-      color: '#fff', fontSize: 20, fontWeight: 700, cursor: 'pointer', lineHeight: '40px', padding: 0,
-    }}>{glyph}</button>
-  );
-
   return ReactDOM.createPortal(
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,.9)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: 24, boxSizing: 'border-box', animation: 'fadeIn .15s',
-    }}>
-      <img src={ph.url} alt={ph.title || ''} draggable={false}
-        onClick={ev => ev.stopPropagation()}
-        onPointerDown={aoArrastarInicio}
-        onPointerMove={aoArrastar}
-        onPointerUp={aoArrastarFim}
-        onPointerCancel={aoArrastarFim}
-        style={{
-          maxWidth: '100%', maxHeight: 'calc(100% - 90px)', objectFit: 'contain', borderRadius: 10, display: 'block',
-          touchAction: 'pan-y', transform: `translateX(${dx}px)`,
-          transition: arrasto.current.ativo ? 'none' : 'transform .18s',
-          cursor: photos.length > 1 ? 'grab' : 'default',
-        }} />
+    <div onClick={onClose} className="fixed inset-0 z-[3000] box-border flex flex-col items-center justify-center bg-black/90 p-6" style={{ animation: 'fadeIn .15s' }}>
+      <div onClick={ev => ev.stopPropagation()} className="w-full max-w-4xl">
+        <VerticalthumbsSlider fotos={photos} startIndex={idx} alturaClasse="h-[min(70vh,520px)]" />
 
-      {(ph.title || ph.description) && (
-        <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 14, maxWidth: 620, textAlign: 'center' }}>
-          {ph.title && <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 800, color: '#fff' }}>{ph.title}</div>}
-          {ph.description && <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,.72)', marginTop: 3, lineHeight: 1.45 }}>{ph.description}</div>}
-        </div>
-      )}
+        {(ph.title || ph.description) && (
+          <div className="mx-auto mt-3.5 max-w-[620px] text-center">
+            {ph.title && <div className="text-[15px] font-extrabold text-white">{ph.title}</div>}
+            {ph.description && <div className="mt-1 text-[13px] font-medium leading-relaxed text-white/70">{ph.description}</div>}
+          </div>
+        )}
+      </div>
 
-      {photos.length > 1 && (
-        <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.55)' }}>
-          {idx + 1} / {photos.length}
-        </div>
-      )}
-
-      <button onClick={onClose} style={{
-        position: 'absolute', top: 16, right: 16, width: 36, height: 36, borderRadius: 99, border: 'none',
-        background: 'rgba(255,255,255,.15)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: 0,
-      }}>✕</button>
-
-      {photos.length > 1 && arrow(-1, '‹')}
-      {photos.length > 1 && arrow(1, '›')}
+      <button onClick={onClose} className="absolute top-4 right-4 h-9 w-9 cursor-pointer rounded-full border-none bg-white/15 text-[15px] font-bold text-white">✕</button>
     </div>,
     document.body
   );
