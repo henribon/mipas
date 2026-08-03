@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
 import * as data from '@/data';
+import { BackgroundGradient } from '@/components/ui/background-gradient';
 
 export const computeRanks = function (places) {
   const comNota = (places || []).filter(p => p.rating != null)
@@ -657,17 +658,19 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
         {lists.map(l => {
           const count = places.filter(p => (p.list_ids || []).includes(l.id)).length;
           return (
-            <div key={l.id} onClick={() => onOpenList(l.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 14, background: C.surface, borderRadius: 16,
-              padding: '16px 16px', border: `1.5px solid ${C.line}`, cursor: 'pointer',
-            }}>
-              <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
-                <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
+            <BackgroundGradient key={l.id} containerClassName="rounded-[20px]" className="rounded-[16px]">
+              <div onClick={() => onOpenList(l.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 14, background: C.surface, borderRadius: 16,
+                padding: '16px 16px', cursor: 'pointer',
+              }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
+                  <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
+                </div>
+                <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
               </div>
-              <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
-            </div>
+            </BackgroundGradient>
           );
         })}
         {canEdit && (
