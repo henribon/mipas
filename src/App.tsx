@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { getTheme, setTheme, initialTheme } from '@/theme';
 import * as data from '@/data';
 import * as mapa from '@/map';
@@ -416,24 +418,18 @@ export default function App() {
       <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 110, background: C.fade, pointerEvents: 'none', zIndex: 400 }} />
 
-      <button onClick={toggleTheme} title={themeMode === 'dark' ? 'Mudar pro tema claro' : 'Mudar pro tema escuro'} style={{
-        position: 'absolute', top: 16, left: 16, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
-        width: 34, height: 34, background: C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: C.sub, cursor: 'pointer', padding: 0,
-      }}>
+      <Button onClick={toggleTheme} variant="outline" size="icon"
+        tooltip={themeMode === 'dark' ? 'Tema claro' : 'Tema escuro'}
+        className="!absolute top-4 left-4 z-[500] !text-sub">
         {themeMode === 'dark' ? (
           <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><line x1="8" y1="0.8" x2="8" y2="2.6" /><line x1="8" y1="13.4" x2="8" y2="15.2" /><line x1="0.8" y1="8" x2="2.6" y2="8" /><line x1="13.4" y1="8" x2="15.2" y2="8" /><line x1="2.9" y1="2.9" x2="4.2" y2="4.2" /><line x1="11.8" y1="11.8" x2="13.1" y2="13.1" /><line x1="2.9" y1="13.1" x2="4.2" y2="11.8" /><line x1="11.8" y1="4.2" x2="13.1" y2="2.9" /></g></svg>
         ) : (
           <svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5 6 6 0 1 0 13.5 9.5Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
         )}
-      </button>
+      </Button>
 
       {isDesktop && sidebarHidden && (
-        <button onClick={backToSidebar} style={{
-          position: 'absolute', top: 16, left: 60, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
-          padding: '8px 14px', background: C.surface, fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5,
-          color: C.ink, cursor: 'pointer',
-        }}>‹ Voltar</button>
+        <Button onClick={backToSidebar} variant="outline" size="sm" className="!absolute top-4 left-[60px] z-[500] !text-ink">‹ Voltar</Button>
       )}
 
       {showLoading && (
@@ -447,23 +443,18 @@ export default function App() {
       )}
 
       {!sharedMode && (
-        <button onClick={handleAuthButtonClick} style={{
-          position: 'absolute', top: 16, right: 16, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
-          padding: '8px 14px', background: C.surface,
-          fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: canEdit ? C.coral : C.sub, cursor: 'pointer',
-        }}>
+        <Button onClick={handleAuthButtonClick} variant="outline" size="sm"
+          className={cn('!absolute top-4 right-4 z-[500]', !canEdit && '!text-sub')}>
           {canEdit ? 'Sair' : 'Entrar'}
-        </button>
+        </Button>
       )}
 
       {canEdit && (
-        <button onClick={() => setHomeOpen(true)} title="Definir minha casa (usada pra ordenar por distância)" style={{
-          position: 'absolute', top: 16, right: 84, zIndex: 500, border: `1px solid ${C.line}`, borderRadius: 999,
-          width: 34, height: 34, background: C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: home ? C.coral : C.sub, cursor: 'pointer', padding: 0,
-        }}>
+        <Button onClick={() => setHomeOpen(true)} variant="outline" size="icon"
+          tooltip="Definir minha casa"
+          className={cn('!absolute top-4 right-[84px] z-[500]', !home && '!text-sub')}>
           <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 1.5L1.5 7v7.5h4.5v-4.5h4v4.5h4.5V7L8 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
-        </button>
+        </Button>
       )}
 
       {(isDesktop || tab === 'map') && !searchOpen && canEdit && (
@@ -484,7 +475,7 @@ export default function App() {
               <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="7.5" cy="7.5" r="5.5" fill="none" stroke={C.coral} strokeWidth="2.2" /><line x1="12" y1="12" x2="16" y2="16" stroke={C.coral} strokeWidth="2.2" strokeLinecap="round" /></svg>
               <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Rua, praça, avenida…" style={{ border: 'none', background: 'none', fontSize: 15, fontWeight: 600, color: C.ink, width: '100%' }} />
             </div>
-            <button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+            <Button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} variant="plain" size="sm">Cancelar</Button>
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '4px 16px 20px' }}>
             {!query.trim() && (
@@ -566,11 +557,7 @@ export default function App() {
       {!isDesktop && !searchOpen && !draft && (
         <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', zIndex: 700, display: 'flex', gap: 4, background: C.glass, backdropFilter: 'blur(14px)', borderRadius: 999, padding: 5, border: `1.5px solid ${C.line}` }}>
           {[['map', 'Mapa'], ['lists', 'Listas'], ...(canEdit ? [['wish', 'Quero ir']] : [])].map(([k, lb]) => (
-            <button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} style={{
-              border: 'none', cursor: 'pointer', borderRadius: 999, padding: '10px 26px',
-              fontFamily: 'Inter', fontWeight: 700, fontSize: 14,
-              background: tab === k ? C.coral : 'transparent', color: tab === k ? '#fff' : C.sub,
-            }}>{lb}</button>
+            <Button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} variant={tab === k ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
           ))}
         </div>
       )}
@@ -596,11 +583,7 @@ export default function App() {
             {[['lists', 'Listas'], ['wish', 'Quero ir']].map(([k, lb]) => {
               const ativa = k === 'wish' ? tab === 'wish' : tab !== 'wish';
               return (
-                <button key={k} onClick={() => setTab(k)} style={{
-                  border: `1.5px solid ${ativa ? C.coral : C.line}`, borderRadius: 999, padding: '6px 14px', cursor: 'pointer',
-                  fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5,
-                  background: ativa ? C.coral + '22' : C.surface, color: ativa ? C.coral : C.sub,
-                }}>{lb}</button>
+                <Button key={k} onClick={() => setTab(k)} variant={ativa ? 'outline' : 'ghost'} size="xs" active={ativa}>{lb}</Button>
               );
             })}
           </div>

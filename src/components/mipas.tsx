@@ -135,10 +135,7 @@ function RichTextEditor({ value, onChange, placeholder, minHeight }) {
   };
 
   const botao = (rotulo, aoClicar, estilo) => (
-    <button type="button" onMouseDown={ev => ev.preventDefault()} onClick={aoClicar} style={{
-      border: `1px solid ${C.line}`, background: C.cream, color: C.ink, borderRadius: 8,
-      minWidth: 30, height: 28, cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, padding: '0 8px', ...estilo,
-    }}>{rotulo}</button>
+    <Button type="button" onMouseDown={ev => ev.preventDefault()} onClick={aoClicar} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-sub hover:text-ink shadow-none w-7 h-7 p-0 !rounded-lg text-[13px]">{rotulo}</Button>
   );
 
   return (
@@ -225,10 +222,7 @@ function DraftPhotos({ photos, onChange }) {
             style={{ width: '100%', boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`, borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, color: C.ink }} />
         </div>
       ))}
-      <button type="button" onClick={() => inputRef.current.click()} style={{
-        width: 96, height: 72, borderRadius: 10, border: `1.5px dashed ${C.coral}66`,
-        background: 'none', color: C.coral, fontSize: 22, fontWeight: 700, cursor: 'pointer',
-      }}>+</button>
+      <Button type="button" onClick={() => inputRef.current.click()} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] border-dashed w-full !py-3">+</Button>
       <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={escolher} />
     </div>
   );
@@ -247,11 +241,7 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto }) {
             const l = lists.find(x => x.id === id);
             if (!l) return null;
             return (
-              <button key={id} onClick={() => onAlternar(id)} title="Tirar desta lista" style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${l.color}66`,
-                background: l.color + '1E', color: l.color, borderRadius: 999, padding: '4px 10px',
-                fontFamily: 'Inter', fontWeight: 700, fontSize: 12, cursor: 'pointer',
-              }}>{l.emoji} {l.name} <span style={{ opacity: .7 }}>✕</span></button>
+              <Button key={id} onClick={() => onAlternar(id)} title="Tirar desta lista" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none px-2.5 py-1 text-[12px] shadow-none">{l.emoji} {l.name} <span style={{ opacity: .7 }}>✕</span></Button>
             );
           })}
         </div>
@@ -281,11 +271,7 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto }) {
         )}
       </div>
       {onNewList && (
-        <button onClick={onNewList} style={{
-          marginTop: 6, width: '100%', boxSizing: 'border-box', border: `1.5px dashed ${C.coral}66`,
-          borderRadius: 10, padding: '9px', background: 'none', color: C.coral,
-          fontFamily: 'Inter', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-        }}>+ Nova lista</button>
+        <Button onClick={onNewList} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] w-full !py-4 !text-[15px] border-dashed">+ Nova lista</Button>
       )}
     </div>
   );
@@ -439,15 +425,11 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
         {home && (
           <div style={{ marginTop: 14, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 600, color: C.ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Casa definida ({home.latitude.toFixed(4)}, {home.longitude.toFixed(4)})</span>
-            <button onClick={onClear} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B' }}>Remover</button>
+            <Button onClick={onClear} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10 px-3 py-1.5 text-[12px] shadow-none">Remover</Button>
           </div>
         )}
 
-        <button onClick={useCurrentLocation} disabled={locating || saving} style={{
-          width: '100%', boxSizing: 'border-box', marginTop: 14, border: 'none', cursor: locating ? 'default' : 'pointer',
-          borderRadius: 12, padding: '13px 16px', fontFamily: 'Inter', fontSize: 14.5, fontWeight: 700,
-          background: C.coral, color: '#fff', opacity: locating || saving ? .6 : 1,
-        }}>{locating ? 'Localizando…' : 'Usar minha localização atual'}</button>
+        <Button onClick={useCurrentLocation} disabled={locating || saving} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] w-full mt-3.5 !py-3.5 !text-[14.5px]">{locating ? 'Localizando…' : 'Usar minha localização atual'}</Button>
 
         <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Ou busque um endereço</div>
         <input autoFocus value={query} onChange={e => { setQuery(e.target.value); debouncedSearch(e.target.value); }} placeholder="Rua, praça, avenida…"
@@ -528,17 +510,13 @@ function PlaceCard({ place, list, onClose }) {
           )}
           {place.instagram && <InstagramButton handle={place.instagram} />}
           {photos.length > 0 && (
-            <button onClick={() => setOpenId(photos[0].id)} title="Ver as fotos" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${C.line}`,
-              background: C.cream, color: C.ink, borderRadius: 999, padding: '5px 12px',
-              fontFamily: 'Inter', fontSize: 12, fontWeight: 800, letterSpacing: .4, cursor: 'pointer',
-            }}>
+            <Button onClick={() => setOpenId(photos[0].id)} title="Ver as fotos" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px]">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                 <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.9l1.2-2h6.8l1.2 2h1.9A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-9Z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
                 <circle cx="12" cy="13" r="3.6" stroke="currentColor" strokeWidth="1.9" />
               </svg>
               FOTOS{photos.length > 1 ? ` (${photos.length})` : ''}
-            </button>
+            </Button>
           )}
         </div>
         {place.description && <RichText html={place.description} style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }} />}
@@ -598,7 +576,7 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
       : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
       {!isPanel && onBack && (
-        <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Voltar</button>
+        <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[13.5px] shadow-none mb-3 self-start">‹ Voltar</Button>
       )}
       <div className="section-title" style={{ fontFamily: 'Inter', fontSize: isPanel ? 20 : 24, fontWeight: 700, color: C.ink }}>Quero ir</div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13, marginTop: 2 }}>
@@ -608,10 +586,7 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
         Só você vê esta aba, e estes lugares não aparecem no mapa.
       </div>
 
-      <button onClick={onNew} style={{
-        width: '100%', boxSizing: 'border-box', marginTop: 14, border: `2px dashed ${C.coral}66`, background: 'none',
-        borderRadius: 14, padding: '14px', fontFamily: 'Inter', fontWeight: 700, fontSize: 14.5, color: C.coral, cursor: 'pointer',
-      }}>+ Quero ir num lugar novo</button>
+      <Button onClick={onNew} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] w-full mt-3.5 !py-3.5 !text-[14.5px]">+ Quero ir num lugar novo</Button>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
         {comDistancia.map(w => (
@@ -632,13 +607,10 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
               <div style={{ marginTop: 9, fontSize: 12.5, fontWeight: 500, color: C.sub, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{w.note}</div>
             )}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
-              <button onClick={() => onFui(w)} style={{
-                border: 'none', borderRadius: 10, padding: '9px 20px', fontFamily: 'Inter', fontWeight: 800, fontSize: 13,
-                background: C.coral, color: '#fff', cursor: 'pointer', letterSpacing: .4,
-              }}>FUI!</button>
+              <Button onClick={() => onFui(w)} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] !px-6 !py-2.5 tracking-wide">FUI!</Button>
               <span style={{ fontSize: 11.5, fontWeight: 500, color: C.sub }}>vira um lugar numa lista</span>
               <div style={{ flex: 1 }} />
-              <button onClick={() => onRemove(w)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px' }}>Excluir</button>
+              <Button onClick={() => onRemove(w)} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10 px-3 py-1.5 text-[12px] shadow-none">Excluir</Button>
             </div>
           </div>
         ))}
@@ -655,7 +627,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
       : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
       {onBack && (
-        <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Mapa</button>
+        <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Mapa</Button>
       )}
       <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink }}>Minhas listas</div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
@@ -677,10 +649,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
           );
         })}
         {canEdit && (
-          <button onClick={onNewList} style={{
-            border: `2px dashed ${C.coral}66`, background: 'none', borderRadius: 16, padding: '18px',
-            fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.coral, cursor: 'pointer',
-          }}>+ Nova lista</button>
+          <Button onClick={onNewList} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] w-full !py-4 !text-[15px] border-dashed">+ Nova lista</Button>
         )}
       </div>
     </div>
@@ -787,11 +756,7 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
   );
 
   const addBtn = (title) => (
-    <button onClick={() => pickFile(title)} title="Adicionar foto" style={{
-      flexShrink: 0, width: 72, height: 72, borderRadius: 10,
-      border: `1.5px dashed ${C.coral}66`, background: 'none', color: C.coral,
-      fontSize: 22, fontWeight: 700, cursor: 'pointer',
-    }}>+</button>
+    <Button onClick={() => pickFile(title)} title="Adicionar foto" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] border-dashed shrink-0 w-[72px] h-[72px] !rounded-xl text-[22px]">+</Button>
   );
 
   const draftInput = {
@@ -1077,19 +1042,13 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
           <AddressLink place={p} fontSize={12.5} />
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            <button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" style={{
-              border: `1px solid ${C.line}`, background: C.cream, borderRadius: 999, width: 26, height: 26,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.coral, cursor: 'pointer', padding: 0,
-            }}>
+            <Button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] shrink-0">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M8 14.5S13 9 13 5.6A5 5 0 0 0 3 5.6C3 9 8 14.5 8 14.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                 <circle cx="8" cy="5.5" r="1.8" fill="currentColor" />
               </svg>
-            </button>
-            <button onClick={ev => { ev.stopPropagation(); onToggle(); }} title={expanded ? 'Fechar' : (canEdit ? 'Editar este lugar' : 'Ver detalhes')} style={{
-              border: `1px solid ${expanded ? C.coral : C.line}`, background: expanded ? C.coral + '1E' : C.cream, borderRadius: 999, padding: '3px 10px',
-              fontFamily: 'Inter', fontWeight: 700, fontSize: 11.5, color: C.coral, cursor: 'pointer',
-            }}>{expanded ? 'fechar ▴' : (canEdit ? 'editar ▾' : 'detalhes ▾')}</button>
+            </Button>
+            <Button onClick={ev => { ev.stopPropagation(); onToggle(); }} title={expanded ? 'Fechar' : (canEdit ? 'Editar este lugar' : 'Ver detalhes')} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] shrink-0">{expanded ? 'fechar ▴' : (canEdit ? 'editar ▾' : 'detalhes ▾')}</Button>
           </div>
         </div>
 
@@ -1149,21 +1108,15 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
 
             {canEdit && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
-                <button onClick={save} disabled={!dirty || saving} style={{
-                  border: 'none', borderRadius: 10, padding: '9px 18px', fontFamily: 'Inter', fontWeight: 700, fontSize: 13,
-                  background: C.coral, color: '#fff', cursor: dirty && !saving ? 'pointer' : 'default', opacity: dirty && !saving ? 1 : .45,
-                }}>{saving ? 'Salvando…' : 'Salvar'}</button>
+                <Button onClick={save} disabled={!dirty || saving} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] disabled:opacity-45 disabled:cursor-default">{saving ? 'Salvando…' : 'Salvar'}</Button>
                 {dirty && !saving && (
-                  <button onClick={cancel} style={{ border: `1px solid ${C.line}`, background: 'none', borderRadius: 10, padding: '9px 14px', fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.sub, cursor: 'pointer' }}>Desfazer</button>
+                  <Button onClick={cancel} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-ink shadow-md hover:opacity-80 px-5 py-2.5 text-[13px]">Desfazer</Button>
                 )}
                 <div style={{ flex: 1 }} />
                 {(p.list_ids || []).length > 1 && (
-                  <button onClick={() => onRemoveFromList(p)} title={`Continua nas outras ${(p.list_ids || []).length - 1} listas`} style={{
-                    border: `1px solid ${C.line}`, background: 'none', borderRadius: 10, padding: '7px 12px',
-                    fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: C.sub, cursor: 'pointer',
-                  }}>Tirar desta lista</button>
+                  <Button onClick={() => onRemoveFromList(p)} title={`Continua nas outras ${(p.list_ids || []).length - 1} listas`} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-ink shadow-md hover:opacity-80 px-5 py-2.5 text-[13px] !text-sub">Tirar desta lista</Button>
                 )}
-                <button onClick={() => onRemove(p.id)} title="Apaga o lugar de todas as listas" style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Inter', fontWeight: 700, fontSize: 12, color: '#FF6B5B', padding: '4px 6px' }}>Excluir</button>
+                <Button onClick={() => onRemove(p.id)} title="Apaga o lugar de todas as listas" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10 px-3 py-1.5 text-[12px] shadow-none">Excluir</Button>
               </div>
             )}
           </React.Fragment>
@@ -1255,7 +1208,7 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
     <div style={isPanel
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
       : { position: 'absolute', inset: 0, zIndex: 650, background: C.paper, overflow: 'auto', padding: '62px 20px 120px' }}>
-      <button onClick={onBack} style={{ border: 'none', background: 'none', color: C.coral, fontFamily: 'Inter', fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 12 }}>‹ Listas</button>
+      <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Listas</Button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ width: 52, height: 52, borderRadius: 16, background: list.color + '22', border: `1px solid ${list.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{list.emoji}</div>
         <div style={{ flex: 1 }}>
@@ -1263,20 +1216,20 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
           <div style={{ color: C.sub, fontWeight: 500, fontSize: 13 }}>{places.length} {places.length === 1 ? 'lugar' : 'lugares'}</div>
         </div>
         {canEdit && (
-          <button onClick={onShare} style={{ border: `1.5px solid ${C.line}`, background: C.surface, borderRadius: 999, padding: '8px 14px', fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.coral, cursor: 'pointer' }}>
+          <Button onClick={onShare} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px]">
             {list.is_public ? 'Copiar link' : 'Tornar pública e compartilhar'}
-          </button>
+          </Button>
         )}
       </div>
 
       {canEdit && (
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button onClick={onToggleRanking} style={{ border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: 0 }}>
+          <Button onClick={onToggleRanking} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent border-none p-0 gap-2 shadow-none cursor-pointer">
             <div style={{ width: 34, height: 20, borderRadius: 999, background: list.ranking_enabled ? C.coral : C.line, position: 'relative', transition: 'background .15s' }}>
               <div style={{ position: 'absolute', top: 2, left: list.ranking_enabled ? 16 : 2, width: 16, height: 16, borderRadius: 999, background: '#fff', transition: 'left .15s' }} />
             </div>
             <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.sub }}>Ranking nesta lista {list.ranking_enabled ? 'ativado' : 'desativado'}</span>
-          </button>
+          </Button>
           {list.ranking_enabled && (
             <span style={{ fontSize: 11.5, fontWeight: 600, color: C.sub }}>a posição vem da nota; notas iguais empatam</span>
           )}
@@ -1292,10 +1245,7 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
           {sortOptions.map(opt => <option key={opt} value={opt}>{SORT_LABELS[opt]}</option>)}
         </select>
         {sortBy !== 'padrao' && (
-          <button onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))} title={sortDir === 'asc' ? 'Crescente' : 'Decrescente'} style={{
-            border: `1.5px solid ${C.line}`, background: C.surface, borderRadius: 10, width: 32, height: 32, cursor: 'pointer',
-            fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.coral,
-          }}>{sortDir === 'asc' ? '↑' : '↓'}</button>
+          <Button onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))} title={sortDir === 'asc' ? 'Crescente' : 'Decrescente'} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream w-8 h-8 p-0">{sortDir === 'asc' ? '↑' : '↓'}</Button>
         )}
       </div>
 
