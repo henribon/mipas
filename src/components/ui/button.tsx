@@ -12,7 +12,7 @@ export type ButtonProps = {
 } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'>;
 
 const VARIANTES = {
-  primary: 'bg-coral text-white shadow-md hover:opacity-85',
+  primary: 'bg-coral text-coral-texto shadow-md hover:opacity-85',
   secondary: 'bg-cream text-ink shadow-md hover:opacity-80',
   ghost: 'bg-transparent text-sub hover:text-ink',
   outline: 'bg-surface text-coral border border-line shadow-sm hover:bg-cream',

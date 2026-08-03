@@ -5,43 +5,53 @@
 /* Fonte única das cores do Mipas. O theme.ts lê estas variáveis, então mudar
    uma cor aqui muda tanto os utilitários do Tailwind quanto os estilos inline. */
 :root {
-  --slate-50: #f0f2f4;
-  --slate-100: #e1e6ea;
-  --slate-200: #c3ccd5;
-  --slate-300: #a5b3c0;
-  --slate-400: #8899aa;
-  --slate-500: #6a7f95;
-  --slate-600: #556677;
-  --slate-700: #3f4c5a;
-  --slate-800: #2a333c;
-  --slate-900: #15191e;
-  --slate-950: #0f1215;
+  /* navy — fundos, superfícies e texto */
+  --navy-50: #edf0f8;
+  --navy-100: #dbe1f0;
+  --navy-400: #6d87c5;
+  --navy-800: #1d2a49;
+  --navy-900: #0f1524;
+  --navy-950: #0a0f1a;
 
-  --paper: var(--slate-950);
-  --surface: var(--slate-900);
-  --cream: var(--slate-800);
-  --ink: var(--slate-50);
-  --sub: var(--slate-400);
-  --coral: #C25454;
-  --line: rgba(165, 179, 192, 0.28);
-  --glass: rgba(15, 18, 21, 0.92);
-  --fade: linear-gradient(rgba(15, 18, 21, 0.9), rgba(15, 18, 21, 0));
-  --busca-brilho: rgba(136, 153, 170, 0.35);
-  --busca-halo: rgba(21, 25, 30, 0.55);
+  /* denim — tons intermediários (texto secundário, linhas) */
+  --denim-100: #dfe5ec;
+  --denim-400: #8096b3;
+  --denim-600: #4d6380;
+  --denim-800: #263140;
+
+  /* eggshell — o acento dourado */
+  --ouro-300: #d4c691;
+  --ouro-400: #c6b26c;
+  --ouro-700: #6e602b;
+  --ouro-800: #49401d;
+
+  --paper: var(--navy-950);
+  --surface: var(--navy-900);
+  --cream: var(--navy-800);
+  --ink: var(--navy-50);
+  --sub: var(--denim-400);
+  --coral: var(--ouro-400);
+  --coral-texto: var(--navy-950);
+  --line: rgba(128, 150, 179, 0.26);
+  --glass: rgba(10, 15, 26, 0.92);
+  --fade: linear-gradient(rgba(10, 15, 26, 0.9), rgba(10, 15, 26, 0));
+  --busca-brilho: rgba(109, 135, 197, 0.28);
+  --busca-halo: rgba(15, 21, 36, 0.6);
 }
 
 body.light {
-  --paper: var(--slate-50);
+  --paper: #f8f5ed;
   --surface: #ffffff;
-  --cream: var(--slate-100);
-  --ink: var(--slate-900);
-  --sub: var(--slate-600);
-  --coral: #C25454;
-  --line: rgba(63, 76, 90, 0.22);
-  --glass: rgba(240, 242, 244, 0.92);
-  --fade: linear-gradient(rgba(240, 242, 244, 0.9), rgba(240, 242, 244, 0));
-  --busca-brilho: rgba(106, 127, 149, 0.3);
-  --busca-halo: rgba(240, 242, 244, 0.92);
+  --cream: var(--denim-100);
+  --ink: var(--navy-900);
+  --sub: var(--denim-600);
+  --coral: var(--ouro-800);
+  --coral-texto: #ffffff;
+  --line: rgba(38, 49, 64, 0.2);
+  --glass: rgba(248, 245, 237, 0.92);
+  --fade: linear-gradient(rgba(248, 245, 237, 0.9), rgba(248, 245, 237, 0));
+  --busca-brilho: rgba(77, 99, 128, 0.25);
+  --busca-halo: rgba(248, 245, 237, 0.92);
 }
 
 @theme inline {
@@ -51,6 +61,7 @@ body.light {
   --color-ink: var(--ink);
   --color-sub: var(--sub);
   --color-coral: var(--coral);
+  --color-coral-texto: var(--coral-texto);
   --color-line: var(--line);
   --font-sans: 'Inter', system-ui, sans-serif;
 }
@@ -88,11 +99,11 @@ a {
 }
 
 .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(190deg) brightness(1.05) contrast(0.9) saturate(0.85);
+  filter: invert(1) hue-rotate(195deg) brightness(0.95) contrast(0.92) saturate(1.1);
 }
 
 body.light .leaflet-tile-pane {
-  filter: brightness(0.86) contrast(1.04) saturate(0.8) hue-rotate(180deg);
+  filter: brightness(0.94) contrast(1.02) saturate(0.85) sepia(0.12);
 }
 
 .leaflet-control-attribution {

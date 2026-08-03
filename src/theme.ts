@@ -19,15 +19,15 @@ export type Theme = {
 const CHAVES: (keyof Theme)[] = ['paper', 'surface', 'cream', 'ink', 'sub', 'coral', 'line', 'glass', 'fade'];
 
 const FALLBACK: Theme = {
-  paper: '#0f1215',
-  surface: '#15191e',
-  cream: '#2a333c',
-  ink: '#f0f2f4',
-  sub: '#8899aa',
-  coral: '#C25454',
-  line: 'rgba(165,179,192,.28)',
-  glass: 'rgba(15,18,21,.92)',
-  fade: 'linear-gradient(rgba(15,18,21,.9),rgba(15,18,21,0))',
+  paper: '#0a0f1a',
+  surface: '#0f1524',
+  cream: '#1d2a49',
+  ink: '#edf0f8',
+  sub: '#8096b3',
+  coral: '#c6b26c',
+  line: 'rgba(128,150,179,.26)',
+  glass: 'rgba(10,15,26,.92)',
+  fade: 'linear-gradient(rgba(10,15,26,.9),rgba(10,15,26,0))',
 };
 
 let atual: Theme = FALLBACK;
