@@ -29,23 +29,36 @@ implementado — é direção de produto, não escopo atual.
 
 ## Status atual do projeto
 
-O Mipas é hoje um site estático (React no navegador) + Supabase, sem backend
-próprio — roda inteiramente no free tier, só pro dono + amigos:
+O Mipas é hoje um site estático (React) + Supabase, sem backend próprio —
+roda inteiramente no free tier, só pro dono + amigos:
 
-- **Site estático** na pasta [`/docs`](docs/), publicado via **GitHub Pages**
-  direto da branch `main` (Settings → Pages → Folder `/docs`), sem build step,
-  sem GitHub Actions.
+- **Código-fonte** em [`/src`](src/), compilado pelo **Vite** para
+  [`/docs`](docs/), que é o que o **GitHub Pages** publica da branch `main`
+  (Settings → Pages → Folder `/docs`). Sem GitHub Actions: build local e push.
+- **`/docs` é saída de build** — o `vite build` apaga a pasta inteira a cada
+  execução. Nunca guardar nada lá dentro que não seja gerado.
+- **React 18 + TypeScript + Tailwind v4**, com estrutura shadcn
+  (`components.json`). Primitivos reaproveitáveis em `src/components/ui`,
+  telas do Mipas em `src/components/mipas.tsx`.
 - **Supabase** (Postgres gerenciado + API REST automática + Auth + Storage,
   free tier) como backend. Schema, políticas de Row Level Security e bucket
-  de fotos em [`docs/supabase-schema.sql`](docs/supabase-schema.sql) —
-  mudanças de schema entram como bloco de migração incremental idempotente no
-  fim desse arquivo, pra rodar no SQL Editor do dashboard.
-- React rodando via Babel Standalone direto no navegador (zero bundler/npm),
-  carregado via CDN — ver `docs/index.html` pra ordem de carregamento dos
-  módulos. Módulos se comunicam pelo namespace global `window.Mipas`.
+  de fotos em [`supabase/schema.sql`](supabase/schema.sql) — mudanças de
+  schema entram como bloco de migração incremental idempotente no fim desse
+  arquivo, pra rodar no SQL Editor do dashboard.
 - Autenticação: só o dono loga (email/senha, criado manualmente no dashboard
   do Supabase); amigos só visualizam listas marcadas como públicas via link
   (`?list=<uuid>`), sem precisar de conta.
+
+### Comandos
+
+```
+npm run dev      # servidor de desenvolvimento
+npm run build    # compila para /docs — rodar antes de commitar
+npm run typecheck
+```
+
+O TypeScript está em modo permissivo (`strict: false`) e o `build` não roda
+checagem de tipos, herança da migração do JavaScript antigo.
 
 ## Histórico: backend Java (arquivado)
 
