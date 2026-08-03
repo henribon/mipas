@@ -45,7 +45,7 @@ export default function App() {
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [returnListId, setReturnListId] = useState(null);
-  const [themeMode, setThemeMode] = useState(() => (document.body.classList.contains('light') ? 'light' : 'dark'));
+  const [themeMode, setThemeMode] = useState(() => (document.documentElement.classList.contains('dark') ? 'dark' : 'light'));
 
   const toggleTheme = () => {
     const next = themeMode === 'dark' ? 'light' : 'dark';

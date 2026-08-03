@@ -19,15 +19,15 @@ export type Theme = {
 const CHAVES: (keyof Theme)[] = ['paper', 'surface', 'cream', 'ink', 'sub', 'coral', 'line', 'glass', 'fade'];
 
 const FALLBACK: Theme = {
-  paper: '#0a0f1a',
-  surface: '#0f1524',
-  cream: '#1d2a49',
-  ink: '#edf0f8',
-  sub: '#8096b3',
-  coral: '#c6b26c',
-  line: 'rgba(128,150,179,.26)',
-  glass: 'rgba(10,15,26,.92)',
-  fade: 'linear-gradient(rgba(10,15,26,.9),rgba(10,15,26,0))',
+  paper: '#E9E4D8',
+  surface: '#F4EFE4',
+  cream: '#CFC8B8',
+  ink: '#1E1E1E',
+  sub: '#5E5A52',
+  coral: '#2E2E2E',
+  line: '#D2CBBB',
+  glass: '#E9E4D8EB',
+  fade: 'linear-gradient(#E9E4D8E6,#E9E4D800)',
 };
 
 let atual: Theme = FALLBACK;
@@ -47,7 +47,8 @@ export function getTheme(): Theme {
 }
 
 export function setTheme(mode: 'dark' | 'light') {
-  document.body.classList.toggle('light', mode === 'light');
+  document.documentElement.classList.toggle('dark', mode === 'dark');
+  document.body.classList.toggle('dark', mode === 'dark');
   atual = lerDoCss();
   try {
     localStorage.setItem('mipas-theme', mode);
@@ -58,9 +59,9 @@ export function setTheme(mode: 'dark' | 'light') {
 
 export function initialTheme(): 'dark' | 'light' {
   try {
-    return (localStorage.getItem('mipas-theme') as 'dark' | 'light') || 'dark';
+    return (localStorage.getItem('mipas-theme') as 'dark' | 'light') || 'light';
   } catch (e) {
-    return 'dark';
+    return 'light';
   }
 }
 

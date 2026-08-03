@@ -1,57 +1,173 @@
 @import "tailwindcss";
 
-@custom-variant light (&:where(body.light *));
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* Fonte única das cores do Mipas. O theme.ts lê estas variáveis, então mudar
-   uma cor aqui muda tanto os utilitários do Tailwind quanto os estilos inline. */
 :root {
-  /* navy — fundos, superfícies e texto */
-  --navy-50: #edf0f8;
-  --navy-100: #dbe1f0;
-  --navy-400: #6d87c5;
-  --navy-800: #1d2a49;
-  --navy-900: #0f1524;
-  --navy-950: #0a0f1a;
-
-  /* denim — tons intermediários (texto secundário, linhas) */
-  --denim-100: #dfe5ec;
-  --denim-400: #8096b3;
-  --denim-600: #4d6380;
-  --denim-800: #263140;
-
-  /* eggshell — o acento dourado */
-  --ouro-300: #d4c691;
-  --ouro-400: #c6b26c;
-  --ouro-700: #6e602b;
-  --ouro-800: #49401d;
-
-  --paper: var(--navy-950);
-  --surface: var(--navy-900);
-  --cream: var(--navy-800);
-  --ink: var(--navy-50);
-  --sub: var(--denim-400);
-  --coral: var(--ouro-400);
-  --coral-texto: var(--navy-950);
-  --line: rgba(128, 150, 179, 0.26);
-  --glass: rgba(10, 15, 26, 0.92);
-  --fade: linear-gradient(rgba(10, 15, 26, 0.9), rgba(10, 15, 26, 0));
-  --busca-brilho: rgba(109, 135, 197, 0.28);
-  --busca-halo: rgba(15, 21, 36, 0.6);
+  --card: #F4EFE4;
+  --ring: #2E2E2E;
+  --input: #D2CBBB;
+  --muted: #CFC8B8;
+  --accent: #E6E4D7;
+  --border: #D2CBBB;
+  --radius: 0.5rem;
+  --chart-1: #F26A4B;
+  --chart-2: #1E1E1E;
+  --chart-3: #5E5A52;
+  --chart-4: #A89F8F;
+  --chart-5: #CFC8B8;
+  --popover: #F4EFE4;
+  --primary: #2E2E2E;
+  --sidebar: #E3DDCF;
+  --spacing: 0.25rem;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Inter", sans-serif;
+  --secondary: #D8D2C4;
+  --background: #E9E4D8;
+  --font-serif: "Playfair Display", serif;
+  --foreground: #1E1E1E;
+  --destructive: #DC2626;
+  --shadow-blur: 10px;
+  --shadow-color: #000000;
+  --sidebar-ring: #2E2E2E;
+  --shadow-spread: 0px;
+  --letter-spacing: 0.01em;
+  --shadow-opacity: 0.1;
+  --sidebar-accent: #E6E4D7;
+  --sidebar-border: #D2CBBB;
+  --card-foreground: #1E1E1E;
+  --shadow-offset-x: 0px;
+  --shadow-offset-y: 4px;
+  --sidebar-primary: #2E2E2E;
+  --muted-foreground: #5E5A52;
+  --accent-foreground: #2E2E2E;
+  --popover-foreground: #1E1E1E;
+  --primary-foreground: #E6E4D7;
+  --sidebar-foreground: #1E1E1E;
+  --secondary-foreground: #2E2E2E;
+  --destructive-foreground: #FFFFFF;
+  --sidebar-accent-foreground: #2E2E2E;
+  --sidebar-primary-foreground: #E6E4D7;
 }
 
-body.light {
-  --paper: #f8f5ed;
-  --surface: #ffffff;
-  --cream: var(--denim-100);
-  --ink: var(--navy-900);
-  --sub: var(--denim-600);
-  --coral: var(--ouro-800);
-  --coral-texto: #ffffff;
-  --line: rgba(38, 49, 64, 0.2);
-  --glass: rgba(248, 245, 237, 0.92);
-  --fade: linear-gradient(rgba(248, 245, 237, 0.9), rgba(248, 245, 237, 0));
-  --busca-brilho: rgba(77, 99, 128, 0.25);
-  --busca-halo: rgba(248, 245, 237, 0.92);
+.dark {
+  --card: #1C1C1C;
+  --ring: #D1CFC0;
+  --input: #2C2C2C;
+  --muted: #2A2A2A;
+  --accent: #363636;
+  --border: #2C2C2C;
+  --radius: 0.5rem;
+  --chart-1: #F26A4B;
+  --chart-2: #D9CFC2;
+  --chart-3: #8E8A83;
+  --chart-4: #5C5A56;
+  --chart-5: #3B3B3B;
+  --popover: #1C1C1C;
+  --primary: #D1CFC0;
+  --sidebar: #101010;
+  --spacing: 0.25rem;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Inter", sans-serif;
+  --secondary: #222222;
+  --background: #141414;
+  --font-serif: "Playfair Display", serif;
+  --foreground: #E8E3DA;
+  --destructive: #EF4444;
+  --shadow-blur: 15px;
+  --shadow-color: #000000;
+  --sidebar-ring: #D1CFC0;
+  --shadow-spread: 0px;
+  --letter-spacing: 0.01em;
+  --shadow-opacity: 0.3;
+  --sidebar-accent: #363636;
+  --sidebar-border: #2C2C2C;
+  --card-foreground: #E8E3DA;
+  --shadow-offset-x: 0px;
+  --shadow-offset-y: 6px;
+  --sidebar-primary: #D1CFC0;
+  --muted-foreground: #8E8A83;
+  --accent-foreground: #D1CFC0;
+  --popover-foreground: #E8E3DA;
+  --primary-foreground: #363636;
+  --sidebar-foreground: #E8E3DA;
+  --secondary-foreground: #D1CFC0;
+  --destructive-foreground: #FFFFFF;
+  --sidebar-accent-foreground: #D1CFC0;
+  --sidebar-primary-foreground: #363636;
+}
+
+@theme inline {
+  --color-card: var(--card);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-radius: var(--radius);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-sidebar: var(--sidebar);
+  --color-spacing: var(--spacing);
+  --color-font-mono: var(--font-mono);
+  --color-font-sans: var(--font-sans);
+  --color-secondary: var(--secondary);
+  --color-background: var(--background);
+  --color-font-serif: var(--font-serif);
+  --color-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-shadow-blur: var(--shadow-blur);
+  --color-shadow-color: var(--shadow-color);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-shadow-spread: var(--shadow-spread);
+  --color-letter-spacing: var(--letter-spacing);
+  --color-shadow-opacity: var(--shadow-opacity);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-card-foreground: var(--card-foreground);
+  --color-shadow-offset-x: var(--shadow-offset-x);
+  --color-shadow-offset-y: var(--shadow-offset-y);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+}
+
+/* Ponte para os nomes internos do Mipas. Só aponta para as variáveis acima —
+   nenhum valor novo é inventado aqui. Sem isto, os estilos inline espalhados
+   pelo app (que leem paper/surface/ink/...) ficariam sem cor. */
+:root,
+.dark {
+  --paper: var(--background);
+  --surface: var(--card);
+  --cream: var(--muted);
+  --ink: var(--foreground);
+  --sub: var(--muted-foreground);
+  --coral: var(--primary);
+  --coral-texto: var(--primary-foreground);
+  --line: var(--border);
+  --busca-brilho: var(--ring);
+  --busca-halo: var(--secondary);
+}
+
+:root {
+  --glass: #E9E4D8EB;
+  --fade: linear-gradient(#E9E4D8E6, #E9E4D800);
+}
+
+.dark {
+  --glass: #141414EB;
+  --fade: linear-gradient(#141414E6, #14141400);
 }
 
 @theme inline {
@@ -63,7 +179,6 @@ body.light {
   --color-coral: var(--coral);
   --color-coral-texto: var(--coral-texto);
   --color-line: var(--line);
-  --font-sans: 'Inter', system-ui, sans-serif;
 }
 
 html,
@@ -73,8 +188,10 @@ body {
 }
 
 body {
-  background: var(--paper);
-  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  letter-spacing: var(--letter-spacing);
   overscroll-behavior: none;
 }
 
@@ -83,7 +200,7 @@ body {
 }
 
 a {
-  color: var(--coral);
+  color: var(--primary);
 }
 
 ::-webkit-scrollbar {
@@ -92,45 +209,45 @@ a {
 }
 
 .leaflet-container {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   height: 100%;
   width: 100%;
-  background: var(--paper);
+  background: var(--background);
+}
+
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.95) saturate(0.5);
 }
 
 .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(195deg) brightness(0.95) contrast(0.92) saturate(1.1);
-}
-
-body.light .leaflet-tile-pane {
-  filter: brightness(0.94) contrast(1.02) saturate(0.85) sepia(0.12);
+  filter: saturate(0.65) sepia(0.18) brightness(0.98);
 }
 
 .leaflet-control-attribution {
   background: transparent !important;
-  color: var(--sub) !important;
+  color: var(--muted-foreground) !important;
 }
 
 .leaflet-control-attribution a {
-  color: var(--ink) !important;
+  color: var(--foreground) !important;
 }
 
 input,
 textarea,
 select {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
 }
 
 select option {
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--popover);
+  color: var(--popover-foreground);
 }
 
 input:focus,
 textarea:focus,
 select:focus {
   outline: none;
-  border-color: var(--ink) !important;
+  border-color: var(--ring) !important;
 }
 
 .section-title {
@@ -144,7 +261,7 @@ select:focus {
   width: 18px;
   height: 3px;
   border-radius: 2px;
-  background: var(--coral);
+  background: var(--primary);
   flex-shrink: 0;
 }
 
