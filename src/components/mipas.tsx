@@ -4,6 +4,7 @@ import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
 import * as data from '@/data';
 import { Button } from '@/components/ui/button';
+import { WindowCard } from '@/components/ui/window-card';
 import { cn } from '@/lib/utils';
 
 export const computeRanks = function (places) {
@@ -490,7 +491,7 @@ function PlaceCard({ place, list, onClose }) {
   const [openId, setOpenId] = useState(null);
   const photos = place.photos || [];
   return (
-    <div style={{ position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 750, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, boxShadow: '0 14px 40px rgba(0,0,0,.5)', overflow: 'hidden', animation: 'sheetUp .28s cubic-bezier(.2,.9,.3,1)' }}>
+    <WindowCard style={{ position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 750, boxShadow: '0 14px 40px rgba(0,0,0,.5)', animation: 'sheetUp .28s cubic-bezier(.2,.9,.3,1)' }}>
       <div style={{ height: 64, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: gradientForPlace(place, list) }}>
         <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 16, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 52px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
           {place.name}
@@ -523,7 +524,7 @@ function PlaceCard({ place, list, onClose }) {
       </div>
 
       {openId && <PhotoLightbox photos={photos} openId={openId} onSetId={setOpenId} onClose={() => setOpenId(null)} />}
-    </div>
+    </WindowCard>
   );
 }
 
@@ -590,7 +591,7 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
         {comDistancia.map(w => (
-          <div key={w.id} style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.line}`, padding: '12px 14px' }}>
+          <WindowCard key={w.id} bodyClassName="px-3.5 py-3">
             <div style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.ink }}>{w.name}</div>
             <div style={{ marginTop: 3 }}>
               <AddressLink place={w} fontSize={12.5} />
@@ -612,7 +613,7 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
               <div style={{ flex: 1 }} />
               <Button onClick={() => onRemove(w)} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10 px-3 py-1.5 text-[12px] shadow-none">Excluir</Button>
             </div>
-          </div>
+          </WindowCard>
         ))}
       </div>
     </div>
@@ -635,17 +636,14 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
         {lists.map(l => {
           const count = places.filter(p => (p.list_ids || []).includes(l.id)).length;
           return (
-            <div key={l.id} onClick={() => onOpenList(l.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 14, background: C.surface, borderRadius: 16,
-              padding: '16px 16px', border: `1.5px solid ${C.line}`, cursor: 'pointer',
-            }}>
+            <WindowCard key={l.id} onClick={() => onOpenList(l.id)} bodyClassName="flex items-center gap-3.5 p-4">
               <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
                 <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
               </div>
               <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
-            </div>
+            </WindowCard>
           );
         })}
         {canEdit && (
@@ -1029,7 +1027,7 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
   };
 
   return (
-    <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
+    <WindowCard>
       <div onClick={clique} onDoubleClick={duploClique} title="Clique para abrir, duplo clique para ver no mapa"
         style={{ height: 56, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: 'pointer' }}>
         <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 15, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 20px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
@@ -1122,7 +1120,7 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
           </React.Fragment>
         )}
       </div>
-    </div>
+    </WindowCard>
   );
 }
 
