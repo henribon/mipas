@@ -49,6 +49,15 @@ body.light {
   --color-coral: var(--coral);
   --color-line: var(--line);
   --font-sans: 'Inter', system-ui, sans-serif;
+  --animate-background-position-spin: background-position-spin 3000ms infinite alternate;
+  @keyframes background-position-spin {
+  0% {
+    background-position: top center;
+    }
+  100% {
+    background-position: bottom center;
+    }
+  }
 }
 
 html,
@@ -116,6 +125,49 @@ textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--ink) !important;
+}
+
+/* Borda neon do NeonGradientCard, em CSS puro: mesmas cores e mesma animação,
+   sem o JS que mede o elemento. O preenchimento vem de --neon-fill, senão a
+   camada de gradiente cobriria a cor de fundo do botão. */
+:root {
+  --neon-1: #ff00aa;
+  --neon-2: #00FFF1;
+}
+
+.neon-borda {
+  position: relative;
+  border: 2px solid transparent !important;
+  background-image:
+    linear-gradient(var(--neon-fill, var(--surface)), var(--neon-fill, var(--surface))),
+    linear-gradient(0deg, var(--neon-1), var(--neon-2));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 100% 200%;
+  animation: neonSpin 3s infinite alternate;
+}
+
+.neon-borda::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(0deg, var(--neon-1), var(--neon-2));
+  background-size: 100% 200%;
+  filter: blur(var(--neon-brilho, 16px));
+  opacity: .5;
+  animation: neonSpin 3s infinite alternate;
+  pointer-events: none;
+}
+
+.neon-borda-sutil {
+  --neon-brilho: 7px;
+}
+
+@keyframes neonSpin {
+  0% { background-position: top center; }
+  100% { background-position: bottom center; }
 }
 
 .section-title {

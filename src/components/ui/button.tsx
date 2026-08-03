@@ -12,12 +12,12 @@ export type ButtonProps = {
 } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'>;
 
 const VARIANTES = {
-  primary: 'bg-coral text-white shadow-md hover:opacity-85',
-  secondary: 'bg-cream text-ink shadow-md hover:opacity-80',
-  ghost: 'bg-transparent text-sub hover:text-ink',
-  outline: 'bg-surface text-coral border border-line shadow-sm hover:bg-cream',
-  danger: 'bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10',
-  plain: 'bg-transparent text-coral hover:opacity-70',
+  primary: 'text-white shadow-md hover:opacity-85 [--neon-fill:var(--coral)]',
+  secondary: 'text-ink shadow-md hover:opacity-80 [--neon-fill:var(--cream)]',
+  ghost: 'text-sub hover:text-ink [--neon-fill:var(--paper)]',
+  outline: 'text-coral shadow-sm hover:opacity-85 [--neon-fill:var(--surface)]',
+  danger: 'text-[#FF6B5B] hover:opacity-85 [--neon-fill:var(--surface)]',
+  plain: 'text-coral hover:opacity-70 [--neon-fill:var(--paper)]',
 };
 
 const TAMANHOS = {
@@ -45,6 +45,7 @@ export function Button({
       className={cn(
         'group relative inline-flex items-center justify-center',
         'rounded-3xl font-semibold transition',
+        'neon-borda neon-borda-sutil',
         'disabled:opacity-45 disabled:cursor-default',
         disabled ? '' : 'cursor-pointer',
         VARIANTES[variant],
