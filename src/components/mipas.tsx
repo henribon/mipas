@@ -231,7 +231,7 @@ function DraftPhotos({ photos, onChange }) {
   );
 }
 
-function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto }) {
+function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inline }) {
   const C = getTheme();
   const [busca, setBusca] = useState('');
   const termo = busca.trim().toLowerCase();
@@ -255,7 +255,12 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto }) {
           border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 12px', fontSize: 13, fontWeight: 600, color: C.ink,
         }} />
       )}
-      <div style={{ maxHeight: compacto ? 132 : 176, overflowY: 'auto', border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface }}>
+      {/* Com "inline" a lista cresce inteira e quem rola é o bloco de fora —
+          sem isso a folha vira uma caixa de rolagem dentro de outra. */}
+      <div style={{
+        ...(inline ? null : { maxHeight: compacto ? 132 : 176, overflowY: 'auto' }),
+        border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface,
+      }}>
         {filtradas.map(l => {
           const marcada = selecionadas.includes(l.id);
           return (
@@ -297,7 +302,7 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
         <input autoFocus value={draft.name} onChange={e => set('name', e.target.value)} placeholder='Ex: "Melhor pastel da cidade"'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Em quais listas? <span style={{ color: C.sub, fontWeight: 500 }}>(pode ser mais de uma)</span></div>
-        <ListPicker lists={lists} selecionadas={listIds} onAlternar={alternaLista} onNewList={onNewList} />
+        <ListPicker lists={lists} selecionadas={listIds} onAlternar={alternaLista} onNewList={onNewList} inline />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Categoria <span style={{ color: C.sub, fontWeight: 500 }}>(opcional, você escolhe o nome)</span></div>
         <input value={draft.category || ''} onChange={e => set('category', e.target.value)} placeholder='Ex: "Bar", "Pizzaria", "Mirante"…'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />

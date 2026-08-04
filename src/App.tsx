@@ -8,6 +8,7 @@ import * as data from '@/data';
 import * as mapa from '@/map';
 import { auth, LoginForm } from '@/auth';
 import { debounce, geocodeAddress, haversineKm } from '@/geocoding';
+import { errorDetail, isSessionError } from '@/errors';
 import { SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet } from '@/components/mipas';
 
 export default function App() {
@@ -82,7 +83,10 @@ export default function App() {
         setPlaces(ps);
         setLoadError(sharedMode && ls.length === 0 ? 'Essa lista não está disponível.' : '');
       })
-      .catch(() => setLoadError('Não deu pra carregar os dados. Confira o config.js e as políticas do Supabase.'))
+      .catch(e => {
+        console.error('[Mipas] não deu pra carregar os dados:', e);
+        setLoadError('Não deu pra carregar os dados: ' + errorDetail(e));
+      })
       .finally(() => setLoadingData(false));
   }, [authReady, session]);
 
@@ -145,6 +149,21 @@ export default function App() {
 
   useEffect(() => { debouncedSearch(query); }, [query]);
 
+  // Todo alerta de erro passa por aqui: o motivo real vai junto (antes a tela
+  // só chutava "você está logado?", que escondia qualquer outra causa), e
+  // quando o problema é sessão vencida o login volta a ser oferecido.
+  const fail = (acao, e) => {
+    console.error(`[Mipas] ${acao}:`, e);
+    const semSessao = isSessionError(e);
+    alert(`${acao}.\n\nMotivo: ${errorDetail(e)}`
+      + (semSessao ? '\n\nParece que sua sessão expirou — entre de novo e tente outra vez.' : ''));
+    if (!semSessao) return;
+    auth.getSession().then(s => {
+      setSession(s);
+      if (!s) setLoginOpen(true);
+    });
+  };
+
   const goToPlace = (p) => {
     setTab('map');
     if (isDesktop) {
@@ -191,7 +210,7 @@ export default function App() {
           }
           comFotos = { ...created, photos: [...(created.photos || []), ...enviadas] };
         } catch (err) {
-          alert('O lugar foi guardado, mas não deu pra enviar as fotos.');
+          fail('O lugar foi guardado, mas não deu pra enviar as fotos', err);
         }
       }
       setPlaces(ps => [...ps, comFotos]);
@@ -200,7 +219,7 @@ export default function App() {
           await data.deleteWish(d.wish_id);
           setWishes(ws => ws.filter(w => w.id !== d.wish_id));
         } catch (err) {
-          alert('O lugar foi guardado, mas ele continua no Quero ir.');
+          fail('O lugar foi guardado, mas ele continua no Quero ir', err);
         }
       }
       setDraft(null);
@@ -213,7 +232,7 @@ export default function App() {
         setSelId(created.id);
       }, 100);
     } catch (e) {
-      alert('Não deu pra guardar esse lugar. Você está logado?');
+      fail('Não deu pra guardar esse lugar', e);
     } finally {
       setSaving(false);
     }
@@ -230,7 +249,7 @@ export default function App() {
         setPendingListPick(false);
       }
     } catch (e) {
-      alert('Não deu pra criar a lista.');
+      fail('Não deu pra criar a lista', e);
     } finally {
       setCreatingList(false);
     }
@@ -248,7 +267,7 @@ export default function App() {
       setPlaces(ps => ps.filter(p => p.id !== id));
       setSelId(null);
     } catch (e) {
-      alert('Não deu pra excluir.');
+      fail('Não deu pra excluir esse lugar', e);
     }
   };
 
@@ -269,7 +288,7 @@ export default function App() {
       setQuery('');
       setResults([]);
     } catch (e) {
-      alert('Não deu pra guardar esse desejo.');
+      fail('Não deu pra guardar esse desejo', e);
     } finally {
       setSavingWish(false);
     }
@@ -281,7 +300,7 @@ export default function App() {
       await data.deleteWish(w.id);
       setWishes(ws => ws.filter(x => x.id !== w.id));
     } catch (e) {
-      alert('Não deu pra excluir.');
+      fail('Não deu pra tirar esse lugar do Quero ir', e);
     }
   };
 
@@ -309,7 +328,7 @@ export default function App() {
       await data.setPlaceLists(lugar.id, restantes);
       setPlaces(ps => ps.map(p => (p.id === lugar.id ? { ...p, list_ids: restantes } : p)));
     } catch (e) {
-      alert('Não deu pra tirar o lugar desta lista.');
+      fail('Não deu pra tirar o lugar desta lista', e);
     }
   };
 
@@ -324,7 +343,7 @@ export default function App() {
       await navigator.clipboard.writeText(url);
       alert('Link copiado:\n' + url);
     } catch (e) {
-      alert('Não deu pra gerar o link.');
+      fail('Não deu pra gerar o link', e);
     }
   };
 
@@ -347,7 +366,7 @@ export default function App() {
         return { ...base, photos: (base.photos || []).map(ph => photos.find(n => n.id === ph.id) || ph) };
       }));
     } catch (e) {
-      alert('Não deu pra salvar as alterações.');
+      fail('Não deu pra salvar as alterações', e);
       throw e;
     }
   };
@@ -357,7 +376,7 @@ export default function App() {
       const photo = await data.uploadPhoto(session.user.id, placeId, file, title);
       setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: [...(p.photos || []), photo] } : p)));
     } catch (e) {
-      alert('Não deu pra enviar a foto.');
+      fail('Não deu pra enviar a foto', e);
     }
   };
 
@@ -369,7 +388,7 @@ export default function App() {
       await data.reorderPhotos(ids);
     } catch (e) {
       setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: antes } : p)));
-      alert('Não deu pra salvar a ordem das fotos.');
+      fail('Não deu pra salvar a ordem das fotos', e);
     }
   };
 
@@ -379,7 +398,7 @@ export default function App() {
       await data.deletePhoto(photo);
       setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: (p.photos || []).filter(ph => ph.id !== photo.id) } : p)));
     } catch (e) {
-      alert('Não deu pra excluir a foto.');
+      fail('Não deu pra excluir a foto', e);
     }
   };
 
@@ -388,7 +407,7 @@ export default function App() {
       const updated = await data.updateList(list.id, { ranking_enabled: !list.ranking_enabled });
       setLists(ls => ls.map(l => (l.id === updated.id ? updated : l)));
     } catch (e) {
-      alert('Não deu pra atualizar a lista.');
+      fail('Não deu pra atualizar a lista', e);
     }
   };
 
