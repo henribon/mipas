@@ -563,7 +563,7 @@ function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
   );
 }
 
-function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
+function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, seletor, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
 
@@ -581,6 +581,7 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
       {!isPanel && onBack && (
         <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[13.5px] shadow-none mb-3 self-start">‹ Voltar</Button>
       )}
+      {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="section-title" style={{ fontFamily: 'Inter', fontSize: isPanel ? 20 : 24, fontWeight: 700, color: C.ink, flex: 1 }}>Quero ir</div>
         <AddButton rotulo="Quero ir num lugar novo" onClick={onNew} />
@@ -624,7 +625,7 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
   );
 }
 
-function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, variant }) {
+function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, seletor, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   return (
@@ -634,6 +635,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
       {onBack && (
         <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Mapa</Button>
       )}
+      {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink, flex: 1 }}>Minhas listas</div>
         {canEdit && <AddButton rotulo="Criar lista" onClick={onNewList} />}

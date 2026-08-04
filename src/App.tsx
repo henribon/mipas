@@ -539,6 +539,7 @@ export default function App() {
           onOpenList={setOpenListId}
           onNewList={() => setNewListOpen(true)}
           onBack={() => setTab('map')}
+          seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
         />
       )}
@@ -551,6 +552,7 @@ export default function App() {
           onFui={marcarFui}
           onRemove={removeWish}
           onBack={() => setTab('map')}
+          seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
         />
       )}
@@ -578,9 +580,12 @@ export default function App() {
 
       {!isDesktop && !searchOpen && !draft && (
         <div style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', zIndex: 700, display: 'flex', gap: 4, background: C.glass, backdropFilter: 'blur(14px)', borderRadius: 999, padding: 5, border: `1.5px solid ${C.line}` }}>
-          {[['map', 'Mapa'], ['lists', 'Listas'], ...(canEdit ? [['wish', 'Quero ir']] : [])].map(([k, lb]) => (
-            <Button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} variant={tab === k ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
-          ))}
+          {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => {
+            const ativa = k === 'map' ? tab === 'map' : tab !== 'map';
+            return (
+              <Button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} variant={ativa ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
+            );
+          })}
         </div>
       )}
 
