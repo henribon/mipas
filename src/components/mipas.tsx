@@ -4,6 +4,7 @@ import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
 import * as data from '@/data';
 import { Button } from '@/components/ui/button';
+import { AddButton } from '@/components/ui/add-button';
 import VerticalthumbsSlider from '@/components/ui/vertical-thumbnail-slider';
 import { WindowCard } from '@/components/ui/window-card';
 import { cn } from '@/lib/utils';
@@ -580,7 +581,10 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
       {!isPanel && onBack && (
         <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[13.5px] shadow-none mb-3 self-start">‹ Voltar</Button>
       )}
-      <div className="section-title" style={{ fontFamily: 'Inter', fontSize: isPanel ? 20 : 24, fontWeight: 700, color: C.ink }}>Quero ir</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="section-title" style={{ fontFamily: 'Inter', fontSize: isPanel ? 20 : 24, fontWeight: 700, color: C.ink, flex: 1 }}>Quero ir</div>
+        <AddButton rotulo="Quero ir num lugar novo" onClick={onNew} />
+      </div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13, marginTop: 2 }}>
         {comDistancia.length === 0 ? 'nenhum lugar na fila ainda' : `${comDistancia.length} ${comDistancia.length === 1 ? 'lugar na fila' : 'lugares na fila'}`}
       </div>
@@ -588,7 +592,6 @@ function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, variant }) {
         Só você vê esta aba, e estes lugares não aparecem no mapa.
       </div>
 
-      <Button onClick={onNew} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] w-full mt-3.5 !py-3.5 !text-[14.5px]">+ Quero ir num lugar novo</Button>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
         {comDistancia.map(w => (
@@ -631,7 +634,10 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
       {onBack && (
         <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Mapa</Button>
       )}
-      <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink }}>Minhas listas</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink, flex: 1 }}>Minhas listas</div>
+        {canEdit && <AddButton rotulo="Criar lista" onClick={onNewList} />}
+      </div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {lists.map(l => {
@@ -647,9 +653,6 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, var
             </WindowCard>
           );
         })}
-        {canEdit && (
-          <Button onClick={onNewList} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] w-full !py-4 !text-[15px] border-dashed">+ Nova lista</Button>
-        )}
       </div>
     </div>
   );

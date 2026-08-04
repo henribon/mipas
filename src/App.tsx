@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
+import { Dropdown } from '@/components/ui/dropdown';
 import { cn } from '@/lib/utils';
 import { getTheme, setTheme, initialTheme } from '@/theme';
 import * as data from '@/data';
@@ -600,14 +601,12 @@ export default function App() {
     {isDesktop && !sidebarHidden && (
       <div style={{ width: 380, flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {canEdit && !openList && (
-          <div style={{ display: 'flex', gap: 6, padding: '14px 20px 0', flexShrink: 0 }}>
-            {[['lists', 'Listas'], ['wish', 'Quero ir']].map(([k, lb]) => {
-              const ativa = k === 'wish' ? tab === 'wish' : tab !== 'wish';
-              return (
-                <Button key={k} onClick={() => setTab(k)} variant="outline" size="xs" active={ativa}
-                  className={cn(!ativa && '!border-transparent !text-sub !shadow-none !bg-transparent')}>{lb}</Button>
-              );
-            })}
+          <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
+            <Dropdown
+              valor={tab === 'wish' ? 'wish' : 'lists'}
+              opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]}
+              onEscolher={setTab}
+            />
           </div>
         )}
         {!openList && tab === 'wish' && canEdit ? (
