@@ -468,47 +468,64 @@ export default function App() {
       )}
 
       {searchOpen && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 800, background: C.paper, display: 'flex', flexDirection: 'column', animation: 'fadeIn .15s' }}>
-          <div style={{ padding: '66px 16px 10px', display: 'flex', gap: 10, alignItems: 'center' }}>
-            <SearchBar
-              autoFocus
-              value={query}
-              onChange={setQuery}
-              onSubmit={() => debouncedSearch(query)}
-              botao="Buscar"
-              placeholder="Rua, praça, avenida…"
-              className="flex-1 min-w-0"
-            />
-            <Button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} variant="plain" size="sm">Cancelar</Button>
-          </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '4px 16px 20px' }}>
-            {!query.trim() && (
-              <div style={{ textAlign: 'center', marginTop: 90, color: C.sub }}>
-                <div style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: C.ink, marginTop: 10 }}>
-                  {searchTarget === 'wish' ? 'Um lugar pra ir um dia' : 'Ache um lugar novo'}
-                </div>
-                <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 6, lineHeight: 1.5 }}>
-                  {searchTarget === 'wish'
-                    ? <React.Fragment>Busque o endereço e guarde na fila.<br />Só você vê, e não entra no mapa.</React.Fragment>
-                    : <React.Fragment>Busque qualquer endereço,<br />dê um nome só seu e guarde numa lista.</React.Fragment>}
-                </div>
-              </div>
+        <div
+          onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }}
+          className={cn(
+            'absolute inset-0 z-[800]',
+            isDesktop ? 'bg-paper/35 backdrop-blur-[2px]' : 'bg-paper',
+          )}
+          style={{ animation: 'fadeIn .15s' }}
+        >
+          <div
+            onClick={ev => ev.stopPropagation()}
+            className={cn(
+              'flex flex-col',
+              isDesktop
+                ? 'absolute left-1/2 top-[60px] w-[min(560px,calc(100%-32px))] -translate-x-1/2 overflow-hidden rounded-xl border border-line bg-surface/90 shadow-2xl backdrop-blur-xl'
+                : 'h-full',
             )}
-            {searching && <div style={{ textAlign: 'center', marginTop: 40, color: C.sub, fontWeight: 600 }}>Buscando…</div>}
-            {query.trim() && !searching && results.length === 0 && (
-              <div style={{ textAlign: 'center', marginTop: 80, color: C.sub, fontWeight: 600 }}>Nada por aqui... tenta outro endereço</div>
-            )}
-            {results.map((r, i) => (
-              <div key={i} onClick={() => (searchTarget === 'wish'
-                ? setWishDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', instagram: '', note: '' })
-                : setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', photos: [], list_ids: openListId && lists.some(l => l.id === openListId) ? [openListId] : (lists[0] ? [lists[0].id] : []) }))}
-                style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 6px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
+          >
+            <div className={cn('flex items-center gap-2.5', isDesktop ? 'p-3' : 'px-4 pb-2.5 pt-[66px]')}>
+              <SearchBar
+                autoFocus
+                value={query}
+                onChange={setQuery}
+                onSubmit={() => debouncedSearch(query)}
+                placeholder="Rua, praça, avenida…"
+                className="min-w-0 flex-1"
+              />
+              <Button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} variant="plain" size="sm">Cancelar</Button>
+            </div>
+
+            <div className={cn('overflow-auto', isDesktop ? 'max-h-[min(60vh,420px)] px-3 pb-3' : 'flex-1 px-4 pb-5')}>
+              {!query.trim() && (
+                <div className={cn('text-center text-sub', isDesktop ? 'py-6' : 'mt-[90px]')}>
+                  <div className="text-[17px] font-bold text-ink">
+                    {searchTarget === 'wish' ? 'Um lugar pra ir um dia' : 'Ache um lugar novo'}
+                  </div>
+                  <div className="mt-1.5 text-[13.5px] font-medium leading-relaxed">
+                    {searchTarget === 'wish'
+                      ? <React.Fragment>Busque o endereço e guarde na fila.<br />Só você vê, e não entra no mapa.</React.Fragment>
+                      : <React.Fragment>Busque qualquer endereço,<br />dê um nome só seu e guarde numa lista.</React.Fragment>}
+                  </div>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.35 }}>{r.address}</div>
-              </div>
-            ))}
+              )}
+              {searching && <div className="py-6 text-center font-semibold text-sub">Buscando…</div>}
+              {query.trim() && !searching && results.length === 0 && (
+                <div className="py-6 text-center font-semibold text-sub">Nada por aqui... tenta outro endereço</div>
+              )}
+              {results.map((r, i) => (
+                <div key={i} onClick={() => (searchTarget === 'wish'
+                  ? setWishDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', instagram: '', note: '' })
+                  : setDraft({ address: r.address, lat: r.lat, lng: r.lng, name: '', category: '', rating: '', description: '', avg_price: '', instagram: '', photos: [], list_ids: openListId && lists.some(l => l.id === openListId) ? [openListId] : (lists[0] ? [lists[0].id] : []) }))}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border-b border-line px-2 py-3.5 last:border-b-0 hover:bg-cream">
+                  <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-cream">
+                    <svg width="12" height="16" viewBox="0 0 12 16"><path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" /><circle cx="6" cy="5.6" r="1.8" fill={C.coral} /></svg>
+                  </div>
+                  <div className="text-[14px] font-semibold leading-snug text-ink">{r.address}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
