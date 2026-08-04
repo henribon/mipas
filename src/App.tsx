@@ -463,7 +463,7 @@ export default function App() {
           readOnly
           onClick={() => { setSearchTarget('place'); setSearchOpen(true); }}
           placeholder="Buscar um endereço pra guardar…"
-          className="absolute top-[66px] left-4 right-[90px] z-[500]"
+          className="absolute top-[66px] left-1/2 -translate-x-1/2 z-[500] w-[240px] max-w-[calc(100%-32px)] transition-[width] duration-300 hover:w-[440px] focus-within:w-[440px]"
         />
       )}
 
@@ -587,7 +587,8 @@ export default function App() {
             {[['lists', 'Listas'], ['wish', 'Quero ir']].map(([k, lb]) => {
               const ativa = k === 'wish' ? tab === 'wish' : tab !== 'wish';
               return (
-                <Button key={k} onClick={() => setTab(k)} variant={ativa ? 'outline' : 'ghost'} size="xs" active={ativa}>{lb}</Button>
+                <Button key={k} onClick={() => setTab(k)} variant="outline" size="xs" active={ativa}
+                  className={cn(!ativa && '!border-transparent !text-sub !shadow-none !bg-transparent')}>{lb}</Button>
               );
             })}
           </div>

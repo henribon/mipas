@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -132,12 +133,36 @@ export function SliderContainer({
   children: ReactNode;
   className?: string;
 }) {
-  const { emblaRef, eixo } = usarCarousel();
+  const { emblaRef, emblaApi, eixo } = usarCarousel();
+  const ultimoGiro = useRef(0);
+
+  // A roda do mouse não é tratada pelo Embla. O acumulado evita que um único
+  // giro do trackpad, que dispara vários eventos, pule várias fotos de uma vez.
+  const aoGirar = useCallback(
+    (ev: React.WheelEvent) => {
+      if (!emblaApi) return;
+      const delta = eixo === 'y' ? ev.deltaY : ev.deltaX || ev.deltaY;
+      if (Math.abs(delta) < 8) return;
+      const agora = Date.now();
+      if (agora - ultimoGiro.current < 320) return;
+      ultimoGiro.current = agora;
+      if (delta > 0) emblaApi.scrollNext();
+      else emblaApi.scrollPrev();
+    },
+    [emblaApi, eixo],
+  );
+
   // A altura precisa estar na viewport (o elemento da ref): é o recorte dela
   // que o Embla rola. Deixando só no contêiner interno, não há transbordo e
   // o carrossel fica parado.
+  // touch-action solta o gesto no eixo do carrossel para o Embla: sem isso o
+  // navegador trata o arraste como rolagem da página e o dedo não move nada.
   return (
-    <div className={cn('overflow-hidden', className)} ref={emblaRef}>
+    <div
+      className={cn('overflow-hidden', eixo === 'y' ? 'touch-pan-x' : 'touch-pan-y', className)}
+      onWheel={aoGirar}
+      ref={emblaRef}
+    >
       <div className={cn('flex h-full', eixo === 'y' && 'flex-col', className)}>
         {React.Children.map(children, (filho, i) =>
           React.isValidElement(filho)

@@ -49,7 +49,7 @@ export function Button({
         disabled ? '' : 'cursor-pointer',
         VARIANTES[variant],
         TAMANHOS[size],
-        active && 'ring-1 ring-coral',
+        active && 'border-coral text-coral',
         className,
       )}
       {...props}
