@@ -26,7 +26,10 @@ create table public.lists (
 create table public.places (
   id           uuid primary key default gen_random_uuid(),
   owner_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  list_id      uuid not null references public.lists(id) on delete cascade,
+  -- Legado: hoje quem diz em quais listas o lugar está é place_lists (ver
+  -- migração 2026-07-30). Fica como rede de segurança, nulo e sem uso — por
+  -- isso "set null": apagar a lista não pode levar o lugar junto.
+  list_id      uuid references public.lists(id) on delete set null,
   name         text not null,
   address      text not null,
   latitude     double precision not null,
@@ -575,5 +578,46 @@ create policy "owner can update own wishes" on public.wish_places
 drop policy if exists "owner can delete own wishes" on public.wish_places;
 create policy "owner can delete own wishes" on public.wish_places
   for delete to authenticated using (auth.uid() = owner_id);
+
+notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- Migração incremental (2026-08-04) — apagar uma lista não pode apagar
+-- lugares que estão em outras listas.
+-- places.list_id virou legado na migração de 2026-07-30 (quem manda agora é
+-- place_lists), mas a chave estrangeira dele continuou "on delete cascade":
+-- nos lugares antigos, que ainda têm list_id preenchido, apagar aquela lista
+-- levava o lugar junto mesmo que ele estivesse em outras listas — e nem a
+-- limpeza de órfãos do app impedia isso, porque o Postgres apaga antes.
+-- Passa a ser "set null": o vínculo antigo se desfaz e o lugar continua vivo
+-- enquanto sobrar alguma linha em place_lists (o app apaga o que ficar órfão).
+-- Idempotente: derruba qualquer FK que exista sobre list_id antes de recriar.
+-- ---------------------------------------------------------
+
+do $$
+declare
+  fk record;
+begin
+  for fk in
+    select con.conname
+      from pg_constraint con
+      join pg_class rel on rel.oid = con.conrelid
+      join pg_namespace ns on ns.oid = rel.relnamespace
+     where ns.nspname = 'public'
+       and rel.relname = 'places'
+       and con.contype = 'f'
+       and pg_get_constraintdef(con.oid) like 'FOREIGN KEY (list_id)%'
+  loop
+    execute format('alter table public.places drop constraint %I', fk.conname);
+  end loop;
+end $$;
+
+alter table public.places
+  add constraint places_list_id_fkey
+  foreign key (list_id) references public.lists(id) on delete set null;
+
+-- A migração de 2026-07-30 já tinha tirado o "not null" daqui; repetido porque
+-- é barato e garante que a coluna aceite o null que o "set null" vai gravar.
+alter table public.places alter column list_id drop not null;
 
 notify pgrst, 'reload schema';
