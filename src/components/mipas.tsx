@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
+import { formatKm, formatMinutes } from '@/routing';
+import { ROUTE_COLORS } from '@/map';
 import * as data from '@/data';
 import { Button } from '@/components/ui/button';
 import { AddButton } from '@/components/ui/add-button';
@@ -493,7 +495,29 @@ function InstagramButton({ handle }) {
   );
 }
 
-function PlaceCard({ place, list, onClose }) {
+function RouteLegend({ route, C }) {
+  const linha = (cor, icone, rotulo, leg) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: C.ink }}>
+      <span style={{ width: 14, height: 3, borderRadius: 2, background: cor, flexShrink: 0 }} />
+      <span>{icone} {rotulo}</span>
+      <span style={{ color: C.sub, fontWeight: 600 }}>{formatMinutes(leg.minutes)} · {formatKm(leg.km)}</span>
+    </div>
+  );
+  const estimado = route.walking.estimated || route.driving.estimated;
+  return (
+    <div style={{ marginTop: 10, background: C.cream, borderRadius: 12, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {linha(ROUTE_COLORS.walking, '🚶', 'A pé', route.walking)}
+      {linha(ROUTE_COLORS.driving, '🚗', 'De carro', route.driving)}
+      {estimado && (
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, lineHeight: 1.35 }}>
+          O roteador não respondeu — isto é estimativa por linha reta.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlaceCard({ place, list, onClose, refKm, refTipo, route, routeLoading, routeOpen, onToggleRoute }) {
   const C = getTheme();
   const [openId, setOpenId] = useState(null);
   const photos = place.photos || [];
@@ -517,6 +541,19 @@ function PlaceCard({ place, list, onClose }) {
             </div>
           )}
           {place.instagram && <InstagramButton handle={place.instagram} />}
+          {onToggleRoute && (
+            <button onClick={onToggleRoute}
+              title={routeOpen
+                ? 'Esconder o caminho'
+                : (refTipo === 'gps' ? 'Ver o caminho desde onde você está' : 'Ver o caminho desde a sua casa')}
+              style={{
+                fontSize: 12.5, fontWeight: 700, cursor: 'pointer', borderRadius: 999, padding: '5px 12px',
+                background: routeOpen ? C.coral + '1E' : C.cream, color: routeOpen ? C.coral : C.sub,
+                border: `1px solid ${routeOpen ? C.coral + '55' : 'transparent'}`,
+              }}>
+              {refTipo === 'gps' ? '📍' : '🏠'} {routeLoading ? 'traçando…' : formatKm(refKm)}
+            </button>
+          )}
           {photos.length > 0 && (
             <Button onClick={() => setOpenId(photos[0].id)} title="Ver as fotos" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px]">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
@@ -527,6 +564,7 @@ function PlaceCard({ place, list, onClose }) {
             </Button>
           )}
         </div>
+        {routeOpen && route && <RouteLegend route={route} C={C} />}
         {place.description && <RichText html={place.description} style={{ marginTop: 10, fontSize: 13.5, fontWeight: 500, color: C.ink, background: C.cream, borderRadius: 12, padding: '10px 14px', lineHeight: 1.45 }} />}
       </div>
 
@@ -568,14 +606,14 @@ function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
   );
 }
 
-function WishPanel({ wishes, home, onNew, onFui, onRemove, onBack, seletor, variant }) {
+function WishPanel({ wishes, origem, onNew, onFui, onRemove, onBack, seletor, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
 
   const comDistancia = (wishes || []).map(w => ({
     ...w,
-    distanceKm: (home && w.latitude != null && w.longitude != null)
-      ? haversineKm(home.latitude, home.longitude, w.latitude, w.longitude)
+    distanceKm: (origem && w.latitude != null && w.longitude != null)
+      ? haversineKm(origem.latitude, origem.longitude, w.latitude, w.longitude)
       : null,
   }));
 
@@ -642,7 +680,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
       )}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink, flex: 1 }}>Minhas listas</div>
+        <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink, flex: 1 }}>{canEdit ? 'Minhas listas' : 'Lista do Bon'}</div>
         {canEdit && <AddButton rotulo="Criar lista" onClick={onNewList} />}
       </div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
@@ -1073,7 +1111,7 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
   );
 }
 
-function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onToggleRanking, canEdit, variant }) {
+function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onToggleRanking, onBuildItinerary, canEdit, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [expandedId, setExpandedId] = useState(null);
@@ -1090,9 +1128,9 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
     if (hasCategories) opts.push('categoria');
     if (hasRatings) opts.push('nota');
     if (hasPrices) opts.push('valor');
-    if (home) opts.push('distancia');
+    if (origem) opts.push('distancia');
     return opts;
-  }, [list.ranking_enabled, hasCategories, hasRatings, hasPrices, home]);
+  }, [list.ranking_enabled, hasCategories, hasRatings, hasPrices, origem]);
 
   useEffect(() => {
     if (!sortOptions.includes(sortBy)) setSortBy('padrao');
@@ -1100,8 +1138,8 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
 
   const withDistance = useMemo(() => places.map(p => ({
     ...p,
-    distanceKm: home ? haversineKm(home.latitude, home.longitude, p.latitude, p.longitude) : null,
-  })), [places, home]);
+    distanceKm: origem ? haversineKm(origem.latitude, origem.longitude, p.latitude, p.longitude) : null,
+  })), [places, origem]);
 
   const ranks = useMemo(() => computeRanks(places), [places]);
 
@@ -1169,6 +1207,12 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
         )}
       </div>
 
+      {onBuildItinerary && places.length > 1 && (
+        <Button onClick={onBuildItinerary} variant="outline" size="sm" className="mt-3.5">
+          🧭 Montar roteiro com esta lista
+        </Button>
+      )}
+
       {canEdit && (
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Button onClick={onToggleRanking} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent border-none p-0 gap-2 shadow-none cursor-pointer">
@@ -1229,6 +1273,420 @@ function ListDetail({ list, places, todasListas, home, onBack, onOpen, onRemove,
 }
 
 
+/**
+ * Cartão que flutua sobre o mapa sem tapá-lo: no desktop encosta na lateral, no
+ * celular vira uma faixa presa ao topo (camadas, logo abaixo do botão) ou ao pé
+ * da tela (roteiro, onde o polegar alcança).
+ */
+function FloatingPanel({ anchor, isDesktop, children }) {
+  const C = getTheme();
+  const posicao = anchor === 'bottom'
+    ? (isDesktop ? { bottom: 20, left: 16, width: 340 } : { bottom: 92, left: 10, right: 10 })
+    : anchor === 'top-right'
+      ? (isDesktop ? { top: 112, right: 16, width: 320 } : { top: 106, left: 12, right: 12 })
+      : (isDesktop ? { top: 112, left: 16, width: 320 } : { top: 106, left: 12, right: 12 });
+  return (
+    <div style={{
+      position: 'absolute', zIndex: 700, ...posicao,
+      maxHeight: isDesktop ? 'calc(100% - 150px)' : '54vh',
+      display: 'flex', flexDirection: 'column',
+      background: C.glass, backdropFilter: 'blur(14px)',
+      border: `1.5px solid ${C.line}`, borderRadius: 16,
+      boxShadow: '0 14px 40px rgba(0,0,0,.35)', overflow: 'hidden',
+      animation: 'sheetUp .22s cubic-bezier(.2,.9,.3,1)',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function PanelHeader({ titulo, subtitulo, acoes = null, onClose }) {
+  const C = getTheme();
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 14px 10px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.ink }}>{titulo}</div>
+        {subtitulo && <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginTop: 2 }}>{subtitulo}</div>}
+      </div>
+      {acoes}
+      <Button onClick={onClose} variant="ghost" size="sm" className="!px-2 !py-1 shrink-0">✕</Button>
+    </div>
+  );
+}
+
+function Chip({ ativo, onClick, children, cor = null }) {
+  const C = getTheme();
+  const destaque = cor || C.coral;
+  return (
+    <button type="button" onClick={onClick} style={{
+      fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 999, padding: '5px 11px',
+      background: ativo ? destaque + '26' : C.cream, color: ativo ? destaque : C.sub,
+      border: `1px solid ${ativo ? destaque + '66' : 'transparent'}`, transition: 'background .12s',
+    }}>{children}</button>
+  );
+}
+
+const RECADO_GPS = {
+  off: 'desligado',
+  pedindo: 'procurando sinal…',
+  negado: 'o navegador bloqueou — libere a localização nas permissões do site',
+  erro: 'não deu pra pegar o sinal agora',
+  indisponivel: 'este navegador não tem geolocalização',
+};
+
+/**
+ * De onde o Mipas mede tudo: distância nas listas, o caminho até um lugar e o
+ * começo do roteiro. A posição ao vivo é a padrão; a casa fica de alternativa
+ * pra quem quer planejar de longe.
+ */
+function OriginPanel({
+  origem, onOrigem, gpsEstado, gpsPos, onLigarGps, onDesligarGps,
+  home, canEdit, onDefinirCasa, onCentralizar, onClose, isDesktop,
+}) {
+  const C = getTheme();
+  const gpsLigado = gpsEstado === 'ligado';
+
+  const opcao = (valor, icone, titulo, situacao, acoes, aoEscolher) => {
+    const escolhida = origem === valor;
+    return (
+      <div style={{
+        border: `1.5px solid ${escolhida ? C.coral + '66' : C.line}`, borderRadius: 12, padding: '10px 12px',
+        background: escolhida ? C.coral + '12' : C.surface,
+      }}>
+        <button type="button" onClick={aoEscolher} style={{
+          display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'transparent',
+          border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left',
+        }}>
+          <span style={{ fontSize: 17, flexShrink: 0 }}>{icone}</span>
+          <span style={{ flex: 1, fontFamily: 'Inter', fontWeight: 700, fontSize: 13.5, color: C.ink }}>{titulo}</span>
+          {escolhida && <span style={{ fontSize: 13, fontWeight: 800, color: C.coral, flexShrink: 0 }}>✓</span>}
+        </button>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, marginTop: 4, lineHeight: 1.4 }}>{situacao}</div>
+        {acoes && <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>{acoes}</div>}
+      </div>
+    );
+  };
+
+  return (
+    <FloatingPanel anchor="top-right" isDesktop={isDesktop}>
+      <PanelHeader titulo="Referência" subtitulo="de onde o Mipas mede as distâncias" onClose={onClose} />
+
+      <div style={{ overflow: 'auto', padding: '12px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {opcao(
+          'gps', '📍', 'Onde estou',
+          gpsLigado
+            ? `ligado · precisão de ${gpsPos && gpsPos.accuracy ? Math.round(gpsPos.accuracy) : '?'} m`
+            : RECADO_GPS[gpsEstado] || RECADO_GPS.off,
+          gpsLigado ? (
+            <React.Fragment>
+              <Button onClick={onCentralizar} variant="outline" size="xs">Centralizar no mapa</Button>
+              <Button onClick={onDesligarGps} variant="ghost" size="xs">Desligar</Button>
+            </React.Fragment>
+          ) : (gpsEstado !== 'indisponivel' && (
+            <Button onClick={onLigarGps} variant="outline" size="xs" disabled={gpsEstado === 'pedindo'}>
+              {gpsEstado === 'pedindo' ? 'Procurando…' : 'Ligar localização'}
+            </Button>
+          )),
+          () => { onOrigem('gps'); if (gpsEstado === 'off' || gpsEstado === 'erro') onLigarGps(); },
+        )}
+
+        {canEdit && opcao(
+          'home', '🏠', 'Minha casa',
+          home ? `definida em ${home.latitude.toFixed(4)}, ${home.longitude.toFixed(4)}` : 'ainda não definida',
+          <Button onClick={onDefinirCasa} variant="outline" size="xs">{home ? 'Alterar' : 'Definir casa'}</Button>,
+          () => onOrigem('home'),
+        )}
+
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, lineHeight: 1.45 }}>
+          {canEdit
+            ? 'A localização nunca é guardada no banco — vive só neste navegador, enquanto estiver ligada.'
+            : 'Sua localização fica só neste navegador: o Mipas não guarda e nem manda pra ninguém.'}
+        </div>
+      </div>
+    </FloatingPanel>
+  );
+}
+
+const NOTAS_MINIMAS = [6, 7, 8, 9];
+
+function MapLayersPanel({
+  lists, places, hiddenListIds, onToggleList, onSetHidden, categories, pickedCategories,
+  onToggleCategory, minRating, onMinRating, visibleCount, onReset, onClose, isDesktop, filtrando,
+}) {
+  const C = getTheme();
+  const temNotas = places.some(p => p.rating != null);
+  const semLista = places.filter(p => (p.list_ids || []).length === 0).length;
+
+  return (
+    <FloatingPanel anchor="top" isDesktop={isDesktop}>
+      <PanelHeader
+        titulo="Camadas do mapa"
+        subtitulo={`${visibleCount} de ${places.length} ${places.length === 1 ? 'lugar aparecendo' : 'lugares aparecendo'}`}
+        onClose={onClose} />
+
+      <div style={{ overflow: 'auto', padding: '10px 14px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: C.sub, flex: 1 }}>Listas</div>
+          <Button onClick={() => onSetHidden([])} variant="plain" size="xs" disabled={hiddenListIds.length === 0}>Todas</Button>
+          <Button onClick={() => onSetHidden(lists.map(l => l.id))} variant="plain" size="xs" disabled={hiddenListIds.length === lists.length}>Nenhuma</Button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {lists.map(l => {
+            const visivel = !hiddenListIds.includes(l.id);
+            const quantos = places.filter(p => (p.list_ids || []).includes(l.id)).length;
+            return (
+              <label key={l.id} style={{
+                display: 'flex', alignItems: 'center', gap: 9, padding: '7px 8px', cursor: 'pointer',
+                borderRadius: 10, background: visivel ? l.color + '14' : 'transparent', opacity: visivel ? 1 : .5,
+              }}>
+                <input type="checkbox" checked={visivel} onChange={() => onToggleList(l.id)}
+                  style={{ accentColor: l.color, width: 15, height: 15, cursor: 'pointer' }} />
+                <span style={{ fontSize: 15 }}>{l.emoji}</span>
+                <span style={{ flex: 1, minWidth: 0, fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.sub }}>{quantos}</span>
+              </label>
+            );
+          })}
+          {semLista > 0 && (
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, padding: '6px 8px 0' }}>
+              {semLista} {semLista === 1 ? 'lugar sem lista continua no mapa' : 'lugares sem lista continuam no mapa'}
+            </div>
+          )}
+        </div>
+
+        {categories.length > 0 && (
+          <React.Fragment>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: C.sub, margin: '14px 0 7px' }}>Categoria</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {categories.map(c => (
+                <Chip key={c} ativo={pickedCategories.includes(c)} onClick={() => onToggleCategory(c)}>{c}</Chip>
+              ))}
+            </div>
+          </React.Fragment>
+        )}
+
+        {temNotas && (
+          <React.Fragment>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: C.sub, margin: '14px 0 7px' }}>Nota mínima</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <Chip ativo={minRating == null} onClick={() => onMinRating(null)}>Qualquer</Chip>
+              {NOTAS_MINIMAS.map(n => (
+                <Chip key={n} ativo={minRating === n} onClick={() => onMinRating(minRating === n ? null : n)}>★ {n}+</Chip>
+              ))}
+            </div>
+            {minRating != null && (
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, marginTop: 6, lineHeight: 1.4 }}>
+                Lugares sem nota ficam de fora enquanto isto estiver ligado.
+              </div>
+            )}
+          </React.Fragment>
+        )}
+
+        {filtrando && (
+          <Button onClick={onReset} variant="secondary" size="sm" className="mt-3.5 w-full">Limpar filtros</Button>
+        )}
+      </div>
+    </FloatingPanel>
+  );
+}
+
+const MODOS_ROTEIRO = [
+  { valor: 'walking', rotulo: '🚶 A pé' },
+  { valor: 'driving', rotulo: '🚗 De carro' },
+];
+
+function Toggle({ ligado, onClick, children }) {
+  const C = getTheme();
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: 'none',
+      padding: 0, cursor: 'pointer', textAlign: 'left',
+    }}>
+      <div style={{ width: 32, height: 19, borderRadius: 999, background: ligado ? C.coral : C.line, position: 'relative', transition: 'background .15s', flexShrink: 0 }}>
+        <div style={{ position: 'absolute', top: 2, left: ligado ? 15 : 2, width: 15, height: 15, borderRadius: 999, background: '#fff', transition: 'left .15s' }} />
+      </div>
+      <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.sub }}>{children}</span>
+    </button>
+  );
+}
+
+function ItineraryPanel({
+  candidatos, lists, stopIds, ordenados, offset, onToggleStop, onMoveStop, onClearStops,
+  mode, onMode, optimize, onOptimize, fromOrigin, onFromOrigin, origemTipo, itinerary, loading,
+  onClose, isDesktop, maxParadas,
+}) {
+  const C = getTheme();
+  const [busca, setBusca] = useState('');
+
+  const paradas = ordenados.map(id => candidatos.find(p => p.id === id)).filter(Boolean);
+  const cheio = stopIds.length >= maxParadas;
+
+  const termo = busca.trim().toLowerCase();
+  const disponiveis = candidatos
+    .filter(p => !stopIds.includes(p.id))
+    .filter(p => !termo || `${p.name} ${p.category || ''}`.toLowerCase().includes(termo));
+
+  // O tempo mostrado antes de cada parada é o do trecho que chega nela; a
+  // primeira do trajeto não tem trecho anterior.
+  const trechoAte = (posicao) => (itinerary && posicao > 0 ? itinerary.legs[posicao - 1] : null);
+
+  const linhaPonto = (posicao, icone, titulo, subtitulo, acoes) => {
+    const leg = trechoAte(posicao);
+    return (
+      <React.Fragment key={`${posicao}-${titulo}`}>
+        {leg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0 3px 13px', fontSize: 11.5, fontWeight: 700, color: C.sub }}>
+            <span style={{ width: 2, height: 14, background: C.line, borderRadius: 2 }} />
+            {formatMinutes(leg.minutes)} · {formatKm(leg.km)}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: 999, flexShrink: 0, background: ROUTE_COLORS[mode], color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
+          }}>{posicao + 1}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {icone} {titulo}
+            </div>
+            {subtitulo && <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitulo}</div>}
+          </div>
+          {acoes}
+        </div>
+      </React.Fragment>
+    );
+  };
+
+  return (
+    <FloatingPanel anchor="bottom" isDesktop={isDesktop}>
+      <PanelHeader
+        titulo="Roteiro"
+        subtitulo={itinerary
+          ? `${paradas.length} ${paradas.length === 1 ? 'parada' : 'paradas'} · ${formatKm(itinerary.km)} · ${formatMinutes(itinerary.minutes)}`
+          : (loading ? 'traçando…' : 'escolha as paradas e o Mipas liga os pontos')}
+        acoes={stopIds.length > 0 && (
+          <Button onClick={onClearStops} variant="ghost" size="sm" className="!px-2 !py-1 shrink-0" tooltip="Apagar o roteiro do mapa">Limpar</Button>
+        )}
+        onClose={onClose} />
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 14px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+        {MODOS_ROTEIRO.map(m => (
+          <Chip key={m.valor} ativo={mode === m.valor} cor={ROUTE_COLORS[m.valor]} onClick={() => onMode(m.valor)}>{m.rotulo}</Chip>
+        ))}
+        <div style={{ flex: 1 }} />
+        <Toggle ligado={optimize} onClick={() => onOptimize(!optimize)}>Melhor ordem</Toggle>
+        {origemTipo && (
+          <Toggle ligado={fromOrigin} onClick={() => onFromOrigin(!fromOrigin)}>
+            {origemTipo === 'gps' ? 'Sair daqui' : 'Sair de casa'}
+          </Toggle>
+        )}
+      </div>
+
+      <div style={{ overflow: 'auto', padding: '12px 14px 14px' }}>
+        {stopIds.length === 0 && !fromOrigin && (
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.sub, lineHeight: 1.5, marginBottom: 12 }}>
+            Toque nos pins do mapa ou escolha abaixo. A partir de duas paradas o trajeto aparece desenhado.
+          </div>
+        )}
+
+        {(paradas.length > 0 || fromOrigin) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+            {fromOrigin && origemTipo && linhaPonto(
+              0,
+              origemTipo === 'gps' ? '📍' : '🏠',
+              origemTipo === 'gps' ? 'Onde estou' : 'Sua casa',
+              'ponto de partida',
+              null,
+            )}
+            {paradas.map((p, i) => linhaPonto(i + offset, '', p.name, p.category || shortAddress(p.address), (
+              <div style={{ display: 'flex', gap: 2, alignItems: 'center', flexShrink: 0 }}>
+                {!optimize && (
+                  <React.Fragment>
+                    <Button onClick={() => onMoveStop(p.id, -1)} disabled={i === 0} variant="ghost" size="sm" className="!px-1.5 !py-1" tooltip="Subir">↑</Button>
+                    <Button onClick={() => onMoveStop(p.id, 1)} disabled={i === paradas.length - 1} variant="ghost" size="sm" className="!px-1.5 !py-1" tooltip="Descer">↓</Button>
+                  </React.Fragment>
+                )}
+                <Button onClick={() => onToggleStop(p.id)} variant="ghost" size="sm" className="!px-1.5 !py-1" tooltip="Tirar do roteiro">✕</Button>
+              </div>
+            )))}
+          </div>
+        )}
+
+        {itinerary && itinerary.estimated && (
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, lineHeight: 1.4, marginBottom: 12 }}>
+            O roteador não respondeu — os trechos tracejados são estimativa por linha reta.
+          </div>
+        )}
+
+        {optimize && paradas.length > 2 && (
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, lineHeight: 1.4, marginBottom: 12 }}>
+            A ordem é calculada pra encurtar o caminho. Desligue "Melhor ordem" pra montar na mão.
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: C.sub, marginBottom: 7 }}>
+          {cheio ? `Máximo de ${maxParadas} paradas` : 'Adicionar parada'}
+        </div>
+
+        {!cheio && (
+          <React.Fragment>
+            {candidatos.length > 6 && (
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar lugar…" style={{
+                width: '100%', boxSizing: 'border-box', marginBottom: 6, background: C.surface,
+                border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 12px', fontSize: 13, fontWeight: 600, color: C.ink,
+              }} />
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {disponiveis.slice(0, 30).map(p => {
+                const lista = lists.find(l => (p.list_ids || []).includes(l.id));
+                return (
+                  <button key={p.id} type="button" onClick={() => onToggleStop(p.id)} style={{
+                    display: 'flex', alignItems: 'center', gap: 9, padding: '7px 8px', borderRadius: 10,
+                    background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
+                  }}>
+                    <span style={{ fontSize: 15, flexShrink: 0 }}>{lista ? lista.emoji : '📍'}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: C.coral, flexShrink: 0 }}>＋</span>
+                  </button>
+                );
+              })}
+              {disponiveis.length === 0 && (
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.sub, padding: '8px 0' }}>
+                  {candidatos.length === 0 ? 'Nenhum lugar visível no mapa — reveja as camadas.' : 'Todos os lugares visíveis já estão no roteiro.'}
+                </div>
+              )}
+            </div>
+          </React.Fragment>
+        )}
+      </div>
+    </FloatingPanel>
+  );
+}
+
+/** Linha de resultado da busca entre os lugares já guardados. */
+function PlaceHit({ place, lists, onClick }) {
+  const C = getTheme();
+  const doLugar = (place.list_ids || []).map(id => lists.find(l => l.id === id)).filter(Boolean);
+  return (
+    <div onClick={onClick} className="flex cursor-pointer items-center gap-3 rounded-lg border-b border-line px-2 py-3 last:border-b-0 hover:bg-cream">
+      <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px]"
+        style={{ background: (doLugar[0] ? doLugar[0].color : C.coral) + '22', fontSize: 17 }}>
+        {doLugar[0] ? doLugar[0].emoji : '📍'}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="truncate text-[14px] font-bold text-ink">{place.name}</div>
+        <div className="truncate text-[12px] font-medium text-sub">
+          {[place.category, doLugar.map(l => l.name).join(', '), shortAddress(place.address)].filter(Boolean).join(' · ')}
+        </div>
+      </div>
+      {place.rating != null && (
+        <div style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.coral }}>★ {place.rating}</div>
+      )}
+    </div>
+  );
+}
+
 export {
   Btn,
   SaveSheet,
@@ -1239,5 +1697,9 @@ export {
   ListDetail,
   WishPanel,
   WishSheet,
+  MapLayersPanel,
+  ItineraryPanel,
+  OriginPanel,
+  PlaceHit,
   gradientForPlace,
 };

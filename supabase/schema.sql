@@ -621,3 +621,70 @@ alter table public.places
 alter table public.places alter column list_id drop not null;
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- Migração incremental (2026-08-04b) — recursão de RLS entre place_lists e
+-- places (erro 42P17, "infinite recursion detected in policy").
+-- A migração de 2026-07-30 deixou duas policies se olhando: a de insert em
+-- place_lists consulta places, e a de leitura pública de places consulta
+-- place_lists. Toda tentativa de vincular um lugar a uma lista voltava em
+-- place_lists e o Postgres abortava — ou seja, guardar lugar novo estava
+-- quebrado desde então (ler seguia funcionando, porque esse caminho é
+-- places -> place_lists -> lists e não repete tabela).
+-- A conferência de dono sai da policy e vai pra uma função security definer,
+-- que roda como dona das tabelas e por isso não dispara RLS outra vez. A
+-- regra continua a mesma: só o dono do lugar E da lista cria o vínculo.
+-- Idempotente: pode rodar de novo sem erro.
+-- ---------------------------------------------------------
+
+-- search_path vazio + nomes qualificados: numa função security definer, deixar
+-- o search_path do chamador valer é porta pra sequestro de nome.
+create or replace function public.owns_place(p_place_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.places p
+     where p.id = p_place_id and p.owner_id = auth.uid()
+  );
+$$;
+
+create or replace function public.owns_list(p_list_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.lists l
+     where l.id = p_list_id and l.owner_id = auth.uid()
+  );
+$$;
+
+-- Só quem está logado precisa delas; anon não usa nenhuma policy que chame isto.
+revoke all on function public.owns_place(uuid) from public;
+revoke all on function public.owns_list(uuid) from public;
+grant execute on function public.owns_place(uuid) to authenticated;
+grant execute on function public.owns_list(uuid) to authenticated;
+
+drop policy if exists "owner can insert own links" on public.place_lists;
+create policy "owner can insert own links" on public.place_lists
+  for insert to authenticated with check (
+    auth.uid() = owner_id
+    and public.owns_list(list_id)
+    and public.owns_place(place_id)
+  );
+
+-- Mesmo tratamento aqui: hoje não fecha ciclo, mas é a mesma consulta a places
+-- de dentro de uma policy, e passa a custar uma expansão a menos.
+drop policy if exists "owner can insert own photos" on public.place_photos;
+create policy "owner can insert own photos" on public.place_photos
+  for insert to authenticated with check (
+    auth.uid() = owner_id and public.owns_place(place_id)
+  );
+
+notify pgrst, 'reload schema';

@@ -9,7 +9,13 @@ import * as mapa from '@/map';
 import { auth, LoginForm } from '@/auth';
 import { debounce, geocodeAddress, haversineKm } from '@/geocoding';
 import { errorDetail, isSessionError } from '@/errors';
-import { SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet } from '@/components/mipas';
+import { fetchRoutes, fetchItinerary, MAX_PARADAS, type Modo } from '@/routing';
+import { useLiveLocation } from '@/location';
+import { SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit } from '@/components/mipas';
+
+// Busca sem acento: "acai" tem que achar "Açaí".
+const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const semTags = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
 export default function App() {
   const C = getTheme();
@@ -55,11 +61,131 @@ export default function App() {
     setThemeMode(next);
   };
 
+  const [routePlaceId, setRoutePlaceId] = useState(null);
+  const [route, setRoute] = useState(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [hiddenListIds, setHiddenListIds] = useState([]);
+  const [pickedCategories, setPickedCategories] = useState([]);
+  const [minRating, setMinRating] = useState(null);
+
+  const gps = useLiveLocation();
+  const [origemPref, setOrigemPref] = useState('gps');
+  const [originOpen, setOriginOpen] = useState(false);
+  const [origemRota, setOrigemRota] = useState(null);
+
+  const [itineraryOpen, setItineraryOpen] = useState(false);
+  const [stopIds, setStopIds] = useState([]);
+  const [itineraryMode, setItineraryMode] = useState<Modo>('driving');
+  const [optimize, setOptimize] = useState(true);
+  const [fromOrigin, setFromOrigin] = useState(false);
+  const [itinerary, setItinerary] = useState(null);
+  const [itineraryLoading, setItineraryLoading] = useState(false);
+
   const mapRef = useRef(null);
   const leafRef = useRef(null);
   const markersRef = useRef({});
+  const routeLayerRef = useRef(null);
+  const itineraryLayerRef = useRef(null);
+  const meLayerRef = useRef(null);
 
   const canEdit = !sharedMode && !!session;
+
+  // De onde tudo é medido. A posição ao vivo manda; a casa entra quando é ela a
+  // escolhida — ou quando o GPS ainda não pegou sinal, pra distância nunca
+  // sumir de quem já tinha casa definida.
+  const origem = useMemo(() => {
+    const doGps = gps.pos ? { tipo: 'gps', latitude: gps.pos.latitude, longitude: gps.pos.longitude } : null;
+    const daCasa = home ? { tipo: 'home', latitude: home.latitude, longitude: home.longitude } : null;
+    return origemPref === 'home' ? (daCasa || doGps) : (doGps || daCasa);
+  }, [origemPref, gps.pos, home]);
+
+  // Andar meio metro não pode virar requisição nova pro roteador: o trajeto só
+  // é refeito quando a origem se move mais de 50 m.
+  useEffect(() => {
+    setOrigemRota(anterior => {
+      if (!origem) return null;
+      const perto = anterior && anterior.tipo === origem.tipo
+        && haversineKm(anterior.latitude, anterior.longitude, origem.latitude, origem.longitude) < 0.05;
+      return perto ? anterior : origem;
+    });
+  }, [origem]);
+
+  const categories = useMemo(() => {
+    const nomes = [];
+    places.forEach(p => {
+      const c = (p.category || '').trim();
+      if (c && !nomes.includes(c)) nomes.push(c);
+    });
+    return nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [places]);
+
+  const filtrando = hiddenListIds.length > 0 || pickedCategories.length > 0 || minRating != null;
+
+  // Um lugar em várias listas continua no mapa enquanto ALGUMA delas estiver
+  // visível — esconder uma lista nunca some com o que também está em outra.
+  const cabeNoFiltro = (p) => {
+    const listasDoLugar = p.list_ids || [];
+    if (listasDoLugar.length > 0 && listasDoLugar.every(id => hiddenListIds.includes(id))) return false;
+    if (pickedCategories.length > 0 && !pickedCategories.includes((p.category || '').trim())) return false;
+    if (minRating != null && !(p.rating != null && Number(p.rating) >= minRating)) return false;
+    return true;
+  };
+
+  const visiblePlaces = useMemo(
+    () => places.filter(cabeNoFiltro),
+    [places, hiddenListIds, pickedCategories, minRating],
+  );
+
+  /** Desfaz só o filtro que estaria escondendo este lugar — usado ao guardar um novo. */
+  const revelarLugar = (p) => {
+    setHiddenListIds(ids => ids.filter(id => !(p.list_ids || []).includes(id)));
+    setPickedCategories(cs => (cs.length && !cs.includes((p.category || '').trim()) ? [] : cs));
+    setMinRating(r => (r != null && !(p.rating != null && Number(p.rating) >= r) ? null : r));
+  };
+
+  const toggleStop = (id) => setStopIds(ids => (
+    ids.includes(id) ? ids.filter(x => x !== id) : (ids.length >= MAX_PARADAS ? ids : [...ids, id])
+  ));
+
+  const moveStop = (id, passo) => setStopIds(ids => {
+    const i = ids.indexOf(id);
+    const destino = i + passo;
+    if (i < 0 || destino < 0 || destino >= ids.length) return ids;
+    const novo = [...ids];
+    novo.splice(destino, 0, novo.splice(i, 1)[0]);
+    return novo;
+  });
+
+  const abrirRoteiro = () => {
+    setItineraryOpen(true);
+    setLayersOpen(false);
+    setRoutePlaceId(null);
+    setSelId(null);
+  };
+
+  // Roteiro a partir de uma lista: o mapa passa a mostrar só ela, e as paradas
+  // saem daí — o painel escolhe entre o que está visível.
+  const montarRoteiroDaLista = (list) => {
+    setHiddenListIds(lists.filter(l => l.id !== list.id).map(l => l.id));
+    setPickedCategories([]);
+    setMinRating(null);
+    setStopIds([]);
+    setOpenListId(null);
+    setTab('map');
+    abrirRoteiro();
+    setTimeout(() => leafRef.current && leafRef.current.invalidateSize(), 60);
+  };
+
+  const offsetRoteiro = (itineraryOpen && fromOrigin && origemRota) ? 1 : 0;
+
+  // Com a ordem otimizada, quem manda na numeração é o que o roteador devolveu;
+  // sem roteiro traçado ainda, vale a ordem em que as paradas foram escolhidas.
+  const stopIdsEmOrdem = useMemo(() => {
+    if (!itinerary || itinerary.order.length !== stopIds.length + offsetRoteiro) return stopIds;
+    return itinerary.order.filter(i => i >= offsetRoteiro).map(i => stopIds[i - offsetRoteiro]);
+  }, [itinerary, stopIds, offsetRoteiro]);
 
   useEffect(() => {
     auth.getSession().then(s => { setSession(s); setAuthReady(true); });
@@ -118,14 +244,30 @@ export default function App() {
   useEffect(() => {
     const m = leafRef.current;
     if (!m) return;
-    mapa.syncMarkers(m, markersRef, places, lists, (p) => {
+    mapa.syncMarkers(m, markersRef, visiblePlaces, lists, (p) => {
+      // Montando roteiro, tocar no pin é escolher a parada — o card do lugar
+      // sairia na frente do painel e roubaria o gesto.
+      if (itineraryOpen) { toggleStop(p.id); return; }
       setSelId(p.id);
       setTab('map');
       setOpenListId(null);
       setReturnListId(null);
       m.flyTo([p.latitude, p.longitude], Math.max(m.getZoom(), 14), { duration: .6 });
     });
-  }, [places, lists]);
+  }, [visiblePlaces, lists, itineraryOpen]);
+
+  // Filtrar até esconder o lugar aberto deixaria um card solto na tela, sem pin.
+  useEffect(() => {
+    if (selId && !visiblePlaces.some(p => p.id === selId)) setSelId(null);
+  }, [visiblePlaces, selId]);
+
+  // Parada que sumiu do mapa (ou do banco) não pode continuar contando no roteiro.
+  useEffect(() => {
+    setStopIds(ids => {
+      const validos = ids.filter(id => visiblePlaces.some(p => p.id === id));
+      return validos.length === ids.length ? ids : validos;
+    });
+  }, [visiblePlaces]);
 
   useEffect(() => {
     if (!sharedMode || places.length === 0) return;
@@ -134,6 +276,67 @@ export default function App() {
     const first = places[0];
     setTimeout(() => m.flyTo([first.latitude, first.longitude], 13, { duration: .6 }), 200);
   }, [sharedMode, places]);
+
+  // Trocar de lugar (ou fechar o card) descarta o caminho traçado, senão ele
+  // ficaria no mapa apontando pra um lugar que não está mais aberto.
+  useEffect(() => { setRoutePlaceId(null); }, [selId]);
+
+  useEffect(() => {
+    const m = leafRef.current;
+    if (!m) return;
+    mapa.clearRoute(routeLayerRef);
+    setRoute(null);
+    const place = places.find(p => p.id === routePlaceId);
+    if (!place || !origemRota) return;
+    let cancelado = false;
+    setRouteLoading(true);
+    fetchRoutes([origemRota.latitude, origemRota.longitude], [place.latitude, place.longitude])
+      .then(r => {
+        if (cancelado || !leafRef.current) return;
+        setRoute(r);
+        mapa.drawRoute(leafRef.current, routeLayerRef, r, 240, origemRota.tipo);
+      })
+      .catch(e => { if (!cancelado) fail('Não deu pra traçar o caminho até esse lugar', e); })
+      .finally(() => { if (!cancelado) setRouteLoading(false); });
+    return () => { cancelado = true; };
+  }, [routePlaceId, origemRota]);
+
+  useEffect(() => {
+    if (leafRef.current) mapa.syncMe(leafRef.current, meLayerRef, gps.pos);
+  }, [gps.pos]);
+
+  // O roteiro se redesenha sozinho a cada mudança, mas com uma pausa antes de
+  // sair pedindo: o Valhalla público é de cortesia e marcar cinco paradas
+  // seguidas não pode virar cinco requisições.
+  useEffect(() => {
+    const m = leafRef.current;
+    if (!m) return;
+    mapa.clearRoute(itineraryLayerRef);
+    setItinerary(null);
+    if (!itineraryOpen) return;
+
+    const paradas = stopIds.map(id => places.find(p => p.id === id)).filter(Boolean);
+    const pontos: [number, number][] = [
+      ...(fromOrigin && origemRota ? [[origemRota.latitude, origemRota.longitude] as [number, number]] : []),
+      ...paradas.map(p => [p.latitude, p.longitude] as [number, number]),
+    ];
+    if (pontos.length < 2) { setItineraryLoading(false); return; }
+
+    let cancelado = false;
+    setItineraryLoading(true);
+    const espera = setTimeout(() => {
+      fetchItinerary(pontos, itineraryMode, optimize)
+        .then(r => {
+          if (cancelado || !leafRef.current) return;
+          setItinerary(r);
+          mapa.drawItinerary(leafRef.current, itineraryLayerRef, r, isDesktop ? 40 : 300);
+        })
+        .catch(e => { if (!cancelado) fail('Não deu pra montar o roteiro', e); })
+        .finally(() => { if (!cancelado) setItineraryLoading(false); });
+    }, 700);
+
+    return () => { cancelado = true; clearTimeout(espera); };
+  }, [itineraryOpen, stopIds, itineraryMode, optimize, fromOrigin, origemRota, places]);
 
   const debouncedSearch = useMemo(() => debounce(async (q) => {
     if (!q.trim()) { setResults([]); return; }
@@ -147,7 +350,22 @@ export default function App() {
     }
   }, 600), []);
 
-  useEffect(() => { debouncedSearch(query); }, [query]);
+  // Endereço novo só interessa a quem pode guardar; quem abriu por link busca
+  // dentro da lista e não precisa acordar o Nominatim.
+  useEffect(() => {
+    if (canEdit) debouncedSearch(query);
+    else setResults([]);
+  }, [query, canEdit]);
+
+  const matchPlaces = useMemo(() => {
+    const termo = semAcento(query).trim();
+    if (!termo) return [];
+    return places.filter(p => {
+      const listas = (p.list_ids || []).map(id => lists.find(l => l.id === id)?.name || '').join(' ');
+      const alvo = semAcento([p.name, p.address, p.category, semTags(p.description), listas].join(' '));
+      return termo.split(/\s+/).every(palavra => alvo.includes(palavra));
+    }).slice(0, 12);
+  }, [query, places, lists]);
 
   // Todo alerta de erro passa por aqui: o motivo real vai junto (antes a tela
   // só chutava "você está logado?", que escondia qualquer outra causa), e
@@ -177,6 +395,14 @@ export default function App() {
       leafRef.current.invalidateSize();
       leafRef.current.flyTo([p.latitude, p.longitude], 15, { duration: .8 });
     }, 60);
+  };
+
+  const abrirLugarDaBusca = (p) => {
+    revelarLugar(p);
+    setSearchOpen(false);
+    setQuery('');
+    setResults([]);
+    goToPlace(p);
   };
 
   const backToSidebar = () => {
@@ -214,6 +440,9 @@ export default function App() {
         }
       }
       setPlaces(ps => [...ps, comFotos]);
+      // Guardar um lugar e ele não aparecer por causa de um filtro ligado antes
+      // pareceria erro — o que acabou de ser criado sempre volta pro mapa.
+      revelarLugar(comFotos);
       if (d.wish_id) {
         try {
           await data.deleteWish(d.wish_id);
@@ -433,6 +662,10 @@ export default function App() {
 
   const showLoading = loadingData && lists.length === 0 && places.length === 0;
 
+  // No celular as listas cobrem o mapa inteiro; painel flutuando por cima delas
+  // seria painel sobre o que ele nem controla.
+  const mapaAparecendo = isDesktop || (tab === 'map' && !openList);
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: C.paper, overflow: 'hidden', display: isDesktop ? 'flex' : 'block' }}>
     <div style={isDesktop ? { position: 'relative', flex: '1 1 auto', minWidth: 0, height: '100%' } : { position: 'absolute', inset: 0 }}>
@@ -449,8 +682,35 @@ export default function App() {
         )}
       </Button>
 
+      {places.length > 1 && (
+        <Button onClick={() => { setLayersOpen(o => !o); }} variant="outline" size="icon"
+          tooltip="Camadas do mapa"
+          className={cn('!absolute top-4 left-[60px] z-[500]', !(layersOpen || filtrando) && '!text-sub')}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1.6 14.4 5 8 8.4 1.6 5 8 1.6Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            <path d="M2.6 8 8 10.9 13.4 8M2.6 11 8 13.9 13.4 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {filtrando && <span style={{ position: 'absolute', top: 4, right: 4, width: 7, height: 7, borderRadius: 99, background: C.coral }} />}
+        </Button>
+      )}
+
+      {places.length > 1 && (
+        <Button onClick={() => (itineraryOpen ? setItineraryOpen(false) : abrirRoteiro())} variant="outline" size="icon"
+          tooltip="Montar roteiro"
+          className={cn('!absolute top-4 left-[108px] z-[500]', !itineraryOpen && '!text-sub')}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+            <circle cx="3.6" cy="12.4" r="2.1" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="12.4" cy="3.6" r="2.1" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M10.3 3.6H6.6a2.6 2.6 0 0 0 0 5.2h2.8a2.6 2.6 0 0 1 0 5.2H5.7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+          {stopIds.length > 0 && (
+            <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 99, background: C.coral, color: '#fff', fontSize: 10, fontWeight: 800, lineHeight: '16px', textAlign: 'center', padding: '0 3px' }}>{stopIds.length}</span>
+          )}
+        </Button>
+      )}
+
       {isDesktop && sidebarHidden && (
-        <Button onClick={backToSidebar} variant="outline" size="sm" className="!absolute top-4 left-[60px] z-[500] !text-ink">‹ Voltar</Button>
+        <Button onClick={backToSidebar} variant="outline" size="sm" className="!absolute top-4 left-[156px] z-[500] !text-ink">‹ Voltar</Button>
       )}
 
       {showLoading && (
@@ -470,19 +730,31 @@ export default function App() {
         </Button>
       )}
 
-      {canEdit && (
-        <Button onClick={() => setHomeOpen(true)} variant="outline" size="icon"
-          tooltip="Definir minha casa"
-          className={cn('!absolute top-4 right-[84px] z-[500]', !home && '!text-sub')}>
+      <Button onClick={() => setOriginOpen(o => !o)} variant="outline" size="icon"
+        tooltip="De onde medir as distâncias"
+        className={cn('!absolute top-4 z-[500]', sharedMode ? 'right-4' : 'right-[84px]', !origem && '!text-sub')}>
+        {origem && origem.tipo === 'home' ? (
           <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 1.5L1.5 7v7.5h4.5v-4.5h4v4.5h4.5V7L8 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
-        </Button>
-      )}
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="2.6" fill="currentColor" />
+            <circle cx="8" cy="8" r="5.4" stroke="currentColor" strokeWidth="1.3" />
+            <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+              <line x1="8" y1="0.9" x2="8" y2="2.6" /><line x1="8" y1="13.4" x2="8" y2="15.1" />
+              <line x1="0.9" y1="8" x2="2.6" y2="8" /><line x1="13.4" y1="8" x2="15.1" y2="8" />
+            </g>
+          </svg>
+        )}
+        {gps.estado === 'ligado' && (
+          <span style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 99, background: mapa.ME_COLOR }} />
+        )}
+      </Button>
 
-      {(isDesktop || tab === 'map') && !searchOpen && canEdit && (
+      {(isDesktop || tab === 'map') && !searchOpen && (canEdit || places.length > 0) && (
         <SearchBar
           readOnly
           onClick={() => { setSearchTarget('place'); setSearchOpen(true); }}
-          placeholder="Buscar um endereço pra guardar…"
+          placeholder={canEdit ? 'Buscar um lugar ou endereço…' : 'Buscar nesta lista…'}
           className="absolute top-[66px] left-1/2 -translate-x-1/2 z-[500] w-[240px] max-w-[calc(100%-32px)] transition-[width] duration-300 hover:w-[440px] focus-within:w-[440px]"
         />
       )}
@@ -511,7 +783,9 @@ export default function App() {
                 value={query}
                 onChange={setQuery}
                 onSubmit={() => debouncedSearch(query)}
-                placeholder="Rua, praça, avenida…"
+                placeholder={searchTarget === 'wish'
+                  ? 'Rua, praça, avenida…'
+                  : (canEdit ? 'Nome, categoria ou endereço…' : 'Buscar nesta lista…')}
                 className="min-w-0 flex-1"
               />
               <Button onClick={() => { setSearchOpen(false); setQuery(''); setResults([]); }} variant="plain" size="sm">Cancelar</Button>
@@ -521,18 +795,37 @@ export default function App() {
               {!query.trim() && (
                 <div className={cn('text-center text-sub', isDesktop ? 'py-6' : 'mt-[90px]')}>
                   <div className="text-[17px] font-bold text-ink">
-                    {searchTarget === 'wish' ? 'Um lugar pra ir um dia' : 'Ache um lugar novo'}
+                    {searchTarget === 'wish' ? 'Um lugar pra ir um dia' : (canEdit ? 'Ache um lugar' : 'Buscar nesta lista')}
                   </div>
                   <div className="mt-1.5 text-[13.5px] font-medium leading-relaxed">
                     {searchTarget === 'wish'
                       ? <React.Fragment>Busque o endereço e guarde na fila.<br />Só você vê, e não entra no mapa.</React.Fragment>
-                      : <React.Fragment>Busque qualquer endereço,<br />dê um nome só seu e guarde numa lista.</React.Fragment>}
+                      : canEdit
+                        ? <React.Fragment>Procure entre os lugares que você já guardou,<br />ou busque um endereço novo pra guardar.</React.Fragment>
+                        : <React.Fragment>Procure pelo nome, categoria<br />ou endereço de um lugar da lista.</React.Fragment>}
                   </div>
                 </div>
               )}
+
+              {searchTarget === 'place' && matchPlaces.length > 0 && (
+                <React.Fragment>
+                  <div className="px-2 pb-1 pt-1 text-[11px] font-extrabold uppercase tracking-wide text-sub">
+                    {canEdit ? 'Nos seus lugares' : 'Nesta lista'}
+                  </div>
+                  {matchPlaces.map(p => (
+                    <PlaceHit key={p.id} place={p} lists={lists} onClick={() => abrirLugarDaBusca(p)} />
+                  ))}
+                </React.Fragment>
+              )}
+
               {searching && <div className="py-6 text-center font-semibold text-sub">Buscando…</div>}
-              {query.trim() && !searching && results.length === 0 && (
-                <div className="py-6 text-center font-semibold text-sub">Nada por aqui... tenta outro endereço</div>
+              {query.trim() && !searching && results.length === 0 && matchPlaces.length === 0 && (
+                <div className="py-6 text-center font-semibold text-sub">
+                  {canEdit ? 'Nada por aqui... tenta outro nome ou endereço' : 'Nenhum lugar com esse nome nesta lista'}
+                </div>
+              )}
+              {results.length > 0 && searchTarget === 'place' && matchPlaces.length > 0 && (
+                <div className="px-2 pb-1 pt-3 text-[11px] font-extrabold uppercase tracking-wide text-sub">Endereços novos</div>
               )}
               {results.map((r, i) => (
                 <div key={i} onClick={() => (searchTarget === 'wish'
@@ -566,7 +859,7 @@ export default function App() {
       {!isDesktop && tab === 'wish' && canEdit && (
         <WishPanel
           wishes={wishes}
-          home={home}
+          origem={origem}
           onNew={() => { setSearchTarget('wish'); setSearchOpen(true); }}
           onFui={marcarFui}
           onRemove={removeWish}
@@ -581,7 +874,7 @@ export default function App() {
           list={openList}
           places={places.filter(p => (p.list_ids || []).includes(openList.id))}
           todasListas={lists}
-          home={home}
+          origem={origem}
           onBack={() => setOpenListId(null)}
           onOpen={goToPlace}
           onRemove={removePlace}
@@ -592,6 +885,7 @@ export default function App() {
           onRemovePhoto={removePhoto}
           onReorderPhotos={reorderPhotos}
           onToggleRanking={() => toggleRanking(openList)}
+          onBuildItinerary={() => montarRoteiroDaLista(openList)}
           canEdit={canEdit}
           variant="overlay"
         />
@@ -608,8 +902,81 @@ export default function App() {
         </div>
       )}
 
-      {sel && (isDesktop || tab === 'map') && !draft && (
+      {originOpen && mapaAparecendo && (
+        <OriginPanel
+          origem={origemPref}
+          onOrigem={setOrigemPref}
+          gpsEstado={gps.estado}
+          gpsPos={gps.pos}
+          onLigarGps={gps.ligar}
+          onDesligarGps={gps.desligar}
+          home={home}
+          canEdit={canEdit}
+          onDefinirCasa={() => { setOriginOpen(false); setHomeOpen(true); }}
+          onCentralizar={() => {
+            if (!gps.pos || !leafRef.current) return;
+            leafRef.current.flyTo([gps.pos.latitude, gps.pos.longitude], Math.max(leafRef.current.getZoom(), 15), { duration: .7 });
+          }}
+          onClose={() => setOriginOpen(false)}
+          isDesktop={isDesktop}
+        />
+      )}
+
+      {layersOpen && mapaAparecendo && (
+        <MapLayersPanel
+          lists={lists}
+          places={places}
+          hiddenListIds={hiddenListIds}
+          onToggleList={id => setHiddenListIds(ids => (ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]))}
+          onSetHidden={setHiddenListIds}
+          categories={categories}
+          pickedCategories={pickedCategories}
+          onToggleCategory={c => setPickedCategories(cs => (cs.includes(c) ? cs.filter(x => x !== c) : [...cs, c]))}
+          minRating={minRating}
+          onMinRating={setMinRating}
+          visibleCount={visiblePlaces.length}
+          filtrando={filtrando}
+          onReset={() => { setHiddenListIds([]); setPickedCategories([]); setMinRating(null); }}
+          onClose={() => setLayersOpen(false)}
+          isDesktop={isDesktop}
+        />
+      )}
+
+      {itineraryOpen && mapaAparecendo && (
+        <ItineraryPanel
+          candidatos={visiblePlaces}
+          lists={lists}
+          stopIds={stopIds}
+          ordenados={stopIdsEmOrdem}
+          offset={offsetRoteiro}
+          onToggleStop={toggleStop}
+          onMoveStop={moveStop}
+          onClearStops={() => setStopIds([])}
+          mode={itineraryMode}
+          onMode={setItineraryMode}
+          optimize={optimize}
+          onOptimize={setOptimize}
+          fromOrigin={fromOrigin}
+          onFromOrigin={setFromOrigin}
+          origemTipo={origemRota ? origemRota.tipo : null}
+          itinerary={itinerary}
+          loading={itineraryLoading}
+          maxParadas={MAX_PARADAS}
+          onClose={() => setItineraryOpen(false)}
+          isDesktop={isDesktop}
+        />
+      )}
+
+      {sel && (isDesktop || tab === 'map') && !draft && !itineraryOpen && (
         <PlaceCard place={sel} list={lists.find(l => (sel.list_ids || []).includes(l.id))}
+          refKm={origem ? haversineKm(origem.latitude, origem.longitude, sel.latitude, sel.longitude) : null}
+          refTipo={origem ? origem.tipo : null}
+          route={route}
+          routeLoading={routeLoading}
+          routeOpen={routePlaceId === sel.id}
+          onToggleRoute={origem
+            ? () => setRoutePlaceId(id => (id === sel.id ? null : sel.id))
+            : null}
           onClose={() => {
             if (isDesktop && sidebarHidden) { backToSidebar(); return; }
             if (!isDesktop && returnListId) {
@@ -636,7 +1003,7 @@ export default function App() {
         {!openList && tab === 'wish' && canEdit ? (
           <WishPanel
             wishes={wishes}
-            home={home}
+            origem={origem}
             onNew={() => { setSearchTarget('wish'); setSearchOpen(true); }}
             onFui={marcarFui}
             onRemove={removeWish}
@@ -646,8 +1013,8 @@ export default function App() {
           <ListDetail
             list={openList}
             places={places.filter(p => (p.list_ids || []).includes(openList.id))}
-          todasListas={lists}
-            home={home}
+            todasListas={lists}
+            origem={origem}
             onBack={() => setOpenListId(null)}
             onOpen={goToPlace}
             onRemove={removePlace}
@@ -658,6 +1025,7 @@ export default function App() {
             onRemovePhoto={removePhoto}
           onReorderPhotos={reorderPhotos}
             onToggleRanking={() => toggleRanking(openList)}
+            onBuildItinerary={() => montarRoteiroDaLista(openList)}
             canEdit={canEdit}
             variant="panel"
           />
