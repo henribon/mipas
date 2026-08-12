@@ -11,6 +11,7 @@ import { debounce, geocodeAddress, haversineKm } from '@/geocoding';
 import { errorDetail, isSessionError } from '@/errors';
 import { fetchRoutes, fetchItinerary, MAX_PARADAS, type Modo } from '@/routing';
 import { useLiveLocation } from '@/location';
+import { loadDraft, saveDraft, clearDraft, draftPreenchido } from '@/drafts';
 import { SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit } from '@/components/mipas';
 
 // Busca sem acento: "acai" tem que achar "Açaí".
@@ -91,6 +92,36 @@ export default function App() {
   const meLayerRef = useRef(null);
 
   const canEdit = !sharedMode && !!session;
+
+  // Fechar a aba sem querer no meio do formulário não pode custar o que já foi
+  // digitado: o rascunho fica guardado e volta sozinho no próximo login.
+  useEffect(() => {
+    if (!canEdit) return;
+    setDraft(d => d || loadDraft('place'));
+    setWishDraft(d => d || loadDraft('wish'));
+  }, [canEdit]);
+
+  useEffect(() => {
+    if (draftPreenchido(draft)) saveDraft('place', draft);
+    else if (draft) clearDraft('place');
+  }, [draft]);
+
+  useEffect(() => {
+    if (draftPreenchido(wishDraft)) saveDraft('wish', wishDraft);
+    else if (wishDraft) clearDraft('wish');
+  }, [wishDraft]);
+
+  const descartarDraft = () => {
+    if (draftPreenchido(draft) && !confirm('Descartar o que você preencheu sobre esse lugar?')) return;
+    clearDraft('place');
+    setDraft(null);
+  };
+
+  const descartarWishDraft = () => {
+    if (draftPreenchido(wishDraft) && !confirm('Descartar o que você preencheu sobre esse lugar?')) return;
+    clearDraft('wish');
+    setWishDraft(null);
+  };
 
   // De onde tudo é medido. A posição ao vivo manda; a casa entra quando é ela a
   // escolhida — ou quando o GPS ainda não pegou sinal, pra distância nunca
@@ -451,6 +482,7 @@ export default function App() {
           fail('O lugar foi guardado, mas ele continua no Quero ir', err);
         }
       }
+      clearDraft('place');
       setDraft(null);
       setSearchOpen(false);
       setQuery('');
@@ -512,6 +544,7 @@ export default function App() {
         note: wishDraft.note?.trim() || null,
       });
       setWishes(ws => [...ws, criado]);
+      clearDraft('wish');
       setWishDraft(null);
       setSearchOpen(false);
       setQuery('');
@@ -1049,7 +1082,7 @@ export default function App() {
           lists={lists}
           saving={saving}
           onNewList={() => { setPendingListPick(true); setNewListOpen(true); }}
-          onCancel={() => setDraft(null)}
+          onCancel={descartarDraft}
           onSave={() => savePlace(draft)}
         />
       )}
@@ -1059,7 +1092,7 @@ export default function App() {
           draft={wishDraft}
           setDraft={setWishDraft}
           saving={savingWish}
-          onCancel={() => setWishDraft(null)}
+          onCancel={descartarWishDraft}
           onSave={saveWish}
         />
       )}
