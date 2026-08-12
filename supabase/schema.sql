@@ -40,6 +40,10 @@ create table public.places (
   description  text,
   avg_price    numeric(10,2),
   instagram    text,
+  -- Foto que o pin do mapa mostra. A referência a place_photos entra logo
+  -- depois que a tabela existe (ver alter table abaixo); sem escolha, o app
+  -- cai na primeira foto da galeria.
+  cover_photo_id uuid,
   created_at   timestamptz not null default now()
 );
 
@@ -65,6 +69,11 @@ create table public.place_photos (
   position      integer,
   created_at    timestamptz not null default now()
 );
+
+-- Apagar a foto escolhida não pode levar o lugar junto: o pin só volta a ser
+-- o pin de emoji (ou a próxima foto da galeria).
+alter table public.places add constraint places_cover_photo_id_fkey
+  foreign key (cover_photo_id) references public.place_photos(id) on delete set null;
 
 create index idx_places_list_id on public.places(list_id);
 create index idx_places_owner_id on public.places(owner_id);
@@ -174,7 +183,8 @@ grant select (id, name, emoji, color, is_public, ranking_enabled, created_at)
 
 revoke select on public.places from anon;
 grant select (id, list_id, name, address, latitude, longitude,
-              rank, category, rating, description, avg_price, instagram, created_at)
+              rank, category, rating, description, avg_price, instagram,
+              cover_photo_id, created_at)
   on public.places to anon;
 
 revoke select on public.place_photos from anon;
@@ -686,5 +696,35 @@ create policy "owner can insert own photos" on public.place_photos
   for insert to authenticated with check (
     auth.uid() = owner_id and public.owns_place(place_id)
   );
+
+notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- Migração 2026-08-12 — foto de capa do pin
+-- O marcador no mapa deixa de ser só emoji e passa a mostrar uma foto do
+-- lugar. Sem escolha explícita o app usa a primeira foto da galeria; esta
+-- coluna guarda a escolha a dedo. Apagar a foto escolhida volta o pin pro
+-- estado anterior em vez de derrubar o lugar (on delete set null).
+--
+-- Atenção: com esta chave estrangeira passam a existir dois caminhos entre
+-- places e place_photos, e o PostgREST recusa `place_photos(...)` no select
+-- sem saber qual usar (PGRST201). Toda query que traz as fotos de um lugar
+-- precisa nomear o caminho: place_photos!place_photos_place_id_fkey(...).
+-- ---------------------------------------------------------
+
+alter table public.places add column if not exists cover_photo_id uuid;
+
+do $$
+begin
+  alter table public.places add constraint places_cover_photo_id_fkey
+    foreign key (cover_photo_id) references public.place_photos(id) on delete set null;
+exception
+  when duplicate_object then null;
+end
+$$;
+
+-- Quem abre uma lista pública precisa ler a coluna, senão o pin volta a ser
+-- emoji pra visitante e foto só pro dono.
+grant select (cover_photo_id) on public.places to anon;
 
 notify pgrst, 'reload schema';

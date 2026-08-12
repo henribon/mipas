@@ -46,22 +46,33 @@ export function getTheme(): Theme {
   return atual;
 }
 
-export function setTheme(mode: 'dark' | 'light') {
+// Chave nova de propósito. A antiga ('mipas-theme') era regravada a cada
+// carregamento com o tema que estava sendo aplicado, então ela guardava o
+// padrão de então — claro — e não uma escolha de verdade de ninguém. Herdar
+// aquele valor deixaria todo mundo preso no claro pra sempre.
+const CHAVE_TEMA = 'mipas-tema';
+
+/** `persistir` só quando a pessoa realmente escolheu, nunca no boot. */
+export function setTheme(mode: 'dark' | 'light', persistir = true) {
   document.documentElement.classList.toggle('dark', mode === 'dark');
   document.body.classList.toggle('dark', mode === 'dark');
   atual = lerDoCss();
+  if (!persistir) return;
   try {
-    localStorage.setItem('mipas-theme', mode);
+    localStorage.setItem(CHAVE_TEMA, mode);
   } catch (e) {
     /* modo privado */
   }
 }
 
+// Escuro é o padrão do Mipas: quem nunca tocou no botão de tema entra no
+// escuro, e quem já escolheu continua com a escolha guardada.
 export function initialTheme(): 'dark' | 'light' {
   try {
-    return (localStorage.getItem('mipas-theme') as 'dark' | 'light') || 'light';
+    localStorage.removeItem('mipas-theme');
+    return (localStorage.getItem(CHAVE_TEMA) as 'dark' | 'light') || 'dark';
   } catch (e) {
-    return 'light';
+    return 'dark';
   }
 }
 

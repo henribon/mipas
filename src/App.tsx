@@ -625,9 +625,26 @@ export default function App() {
     if (!confirm('Excluir essa foto?')) return;
     try {
       await data.deletePhoto(photo);
-      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: (p.photos || []).filter(ph => ph.id !== photo.id) } : p)));
+      // O banco já zera o cover_photo_id nesse caso (on delete set null); aqui
+      // é só não deixar o estado local apontando pra uma foto que não existe.
+      setPlaces(ps => ps.map(p => (p.id === placeId ? {
+        ...p,
+        photos: (p.photos || []).filter(ph => ph.id !== photo.id),
+        cover_photo_id: p.cover_photo_id === photo.id ? null : p.cover_photo_id,
+      } : p)));
     } catch (e) {
       fail('Não deu pra excluir a foto', e);
+    }
+  };
+
+  const setCoverPhoto = async (placeId, photoId) => {
+    const antes = places.find(p => p.id === placeId)?.cover_photo_id ?? null;
+    setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, cover_photo_id: photoId } : p)));
+    try {
+      await data.updatePlace(placeId, { cover_photo_id: photoId });
+    } catch (e) {
+      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, cover_photo_id: antes } : p)));
+      fail('Não deu pra escolher a foto do mapa', e);
     }
   };
 
@@ -884,6 +901,7 @@ export default function App() {
           onAddPhoto={addPhoto}
           onRemovePhoto={removePhoto}
           onReorderPhotos={reorderPhotos}
+          onSetCover={setCoverPhoto}
           onToggleRanking={() => toggleRanking(openList)}
           onBuildItinerary={() => montarRoteiroDaLista(openList)}
           canEdit={canEdit}
@@ -1023,7 +1041,8 @@ export default function App() {
             onSavePlace={savePlaceEdits}
             onAddPhoto={addPhoto}
             onRemovePhoto={removePhoto}
-          onReorderPhotos={reorderPhotos}
+            onReorderPhotos={reorderPhotos}
+            onSetCover={setCoverPhoto}
             onToggleRanking={() => toggleRanking(openList)}
             onBuildItinerary={() => montarRoteiroDaLista(openList)}
             canEdit={canEdit}

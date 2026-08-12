@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
 import { formatKm, formatMinutes } from '@/routing';
-import { ROUTE_COLORS } from '@/map';
+import { ROUTE_COLORS, coverPhoto } from '@/map';
 import * as data from '@/data';
 import { Button } from '@/components/ui/button';
 import { AddButton } from '@/components/ui/add-button';
@@ -703,7 +703,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
   );
 }
 
-function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReorder }) {
+function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReorder, coverId, onSetCover }) {
   const C = getTheme();
   const inputRef = useRef(null);
   const pendingTitleRef = useRef(null);
@@ -720,6 +720,11 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
     const e = (edits || {})[ph.id] || {};
     return campo in e ? e[campo] : (ph[campo] ?? '');
   };
+
+  // Escolher a capa é coisa de dono: quem só está visitando a lista vê as
+  // fotos sem marca nenhuma.
+  const podeEscolherCapa = canEdit && !!onSetCover;
+  const ehCapa = (ph) => podeEscolherCapa && ph.id === coverId;
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -793,11 +798,30 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
         title={canEdit && ordered.length > 1 ? 'Clique pra ver, arraste pra reordenar' : 'Ver foto'}
         style={{
           width: 72, height: 72, objectFit: 'cover', display: 'block', borderRadius: 10,
-          border: `${overId === ph.id ? 2 : 1}px solid ${overId === ph.id ? C.coral : C.line}`,
+          border: `${overId === ph.id || ehCapa(ph) ? 2 : 1}px solid ${overId === ph.id || ehCapa(ph) ? C.coral : C.line}`,
           background: C.cream, cursor: canEdit && ordered.length > 1 ? 'grab' : 'zoom-in',
         }} />
       {canEdit && (
         <button onClick={() => onRemove(ph)} onPointerDown={ev => ev.stopPropagation()} style={{ position: 'absolute', top: 3, right: 3, width: 19, height: 19, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '19px', padding: 0 }}>✕</button>
+      )}
+      {/* Uma marca por estado: a capa se anuncia, as outras oferecem virar capa. */}
+      {podeEscolherCapa && ehCapa(ph) && (
+        <div style={{
+          position: 'absolute', left: 1, right: 1, bottom: 1, background: C.coral, color: 'var(--coral-texto)',
+          fontSize: 9, fontWeight: 800, letterSpacing: .6, textAlign: 'center', padding: '2px 0',
+          borderRadius: '0 0 9px 9px', pointerEvents: 'none',
+        }}>📍 CAPA</div>
+      )}
+      {podeEscolherCapa && !ehCapa(ph) && (
+        <button
+          onClick={() => onSetCover(ph.id)}
+          onPointerDown={ev => ev.stopPropagation()}
+          title="Usar esta foto como capa do pin no mapa"
+          style={{
+            position: 'absolute', left: 1, right: 1, bottom: 1, background: 'rgba(0,0,0,.62)', color: '#fff',
+            fontSize: 9, fontWeight: 700, letterSpacing: .3, textAlign: 'center', padding: '2px 0',
+            border: 'none', borderRadius: '0 0 9px 9px', cursor: 'pointer',
+          }}>usar de capa</button>
       )}
     </div>
   );
@@ -813,6 +837,12 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
 
   return (
     <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {podeEscolherCapa && all.length > 0 && (
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: C.sub, lineHeight: 1.4 }}>
+          A foto marcada como <strong style={{ color: C.ink }}>📍 CAPA</strong> é a que aparece no pin do mapa
+          {all.length > 1 ? ' — toque em "usar de capa" em outra pra trocar' : ''}
+        </div>
+      )}
       {groups.map(g => {
         const desc = (g.items.find(i => i.description && i.description.trim()) || {}).description || '';
         return (
@@ -908,7 +938,7 @@ const NUMERIC_SORT_ACCESSORS = {
   valor: p => p.avg_price,
 };
 
-function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos }) {
+function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover }) {
   const C = getTheme();
 
   const fromPlace = () => ({
@@ -1088,7 +1118,9 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
               <PhotoGallery photos={p.photos} canEdit={canEdit} edits={photoEdits} onEdit={editPhoto}
                 onReorder={ids => onReorderPhotos(p.id, ids)}
                 onAdd={(file, title) => onAddPhoto(p.id, file, title)}
-                onRemove={photo => onRemovePhoto(p.id, photo)} />
+                onRemove={photo => onRemovePhoto(p.id, photo)}
+                coverId={(coverPhoto(p) || {}).id}
+                onSetCover={onSetCover && (photoId => onSetCover(p.id, photoId))} />
             </div>
 
             {canEdit && (
@@ -1111,7 +1143,7 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
   );
 }
 
-function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onToggleRanking, onBuildItinerary, canEdit, variant }) {
+function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onToggleRanking, onBuildItinerary, canEdit, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [expandedId, setExpandedId] = useState(null);
@@ -1263,7 +1295,8 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
                 onSave={onSavePlace}
                 onAddPhoto={onAddPhoto}
                 onRemovePhoto={onRemovePhoto}
-                onReorderPhotos={onReorderPhotos} />
+                onReorderPhotos={onReorderPhotos}
+                onSetCover={onSetCover} />
             ))}
           </React.Fragment>
         ))}
