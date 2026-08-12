@@ -198,17 +198,75 @@ function Btn({ children, onClick, primary, style, disabled, icon, tooltip, class
   );
 }
 
+// Arrastar foto de fora do navegador pra dentro de uma área de fotos. O
+// contador de enter/leave existe porque passar o cursor por cima de um filho
+// dispara dragleave no pai — sem ele o destaque piscaria sem parar.
+const temArquivo = (ev) => Array.from(ev.dataTransfer?.types || []).includes('Files');
+const imagensSoltas = (ev): File[] => (ev.dataTransfer ? Array.from<File>(ev.dataTransfer.files) : [])
+  .filter(f => f.type.startsWith('image/'));
+
+function useFileDrop(onFiles, ativo = true): [boolean, any] {
+  const [sobre, setSobre] = useState(false);
+  const profundidade = useRef(0);
+
+  // Soltar a foto fora da área faria o navegador abrir o arquivo e jogar fora o
+  // que estava preenchido — melhor engolir o drop na página inteira.
+  useEffect(() => {
+    const impedir = (ev) => { if (temArquivo(ev)) ev.preventDefault(); };
+    window.addEventListener('dragover', impedir);
+    window.addEventListener('drop', impedir);
+    return () => {
+      window.removeEventListener('dragover', impedir);
+      window.removeEventListener('drop', impedir);
+    };
+  }, []);
+
+  if (!ativo) return [false, {}];
+
+  return [sobre, {
+    onDragEnter: (ev) => {
+      if (!temArquivo(ev)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      profundidade.current += 1;
+      setSobre(true);
+    },
+    onDragOver: (ev) => {
+      if (!temArquivo(ev)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.dataTransfer.dropEffect = 'copy';
+    },
+    onDragLeave: (ev) => {
+      if (!temArquivo(ev)) return;
+      profundidade.current = Math.max(0, profundidade.current - 1);
+      if (profundidade.current === 0) setSobre(false);
+    },
+    onDrop: (ev) => {
+      if (!temArquivo(ev)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      profundidade.current = 0;
+      setSobre(false);
+      const arquivos = imagensSoltas(ev);
+      if (arquivos.length) onFiles(arquivos);
+    },
+  }];
+}
+
 function DraftPhotos({ photos, onChange }) {
   const C = getTheme();
   const inputRef = useRef(null);
 
+  const adicionar = (arquivos) => {
+    if (!arquivos.length) return;
+    onChange([...photos, ...arquivos.map(file => ({ file, preview: URL.createObjectURL(file), title: '' }))]);
+  };
   const escolher = (ev) => {
-    const arquivos = Array.from(ev.target.files || []);
-    if (arquivos.length) {
-      onChange([...photos, ...arquivos.map(file => ({ file, preview: URL.createObjectURL(file), title: '' }))]);
-    }
+    adicionar(Array.from(ev.target.files || []));
     ev.target.value = '';
   };
+  const [sobre, dropProps] = useFileDrop(adicionar);
   const remover = (i) => {
     URL.revokeObjectURL(photos[i].preview);
     onChange(photos.filter((_, idx) => idx !== i));
@@ -216,7 +274,12 @@ function DraftPhotos({ photos, onChange }) {
   const renomear = (i, title) => onChange(photos.map((p, idx) => (idx === i ? { ...p, title } : p)));
 
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 7, alignItems: 'flex-start' }}>
+    <div {...dropProps} style={{
+      display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 7, alignItems: 'flex-start',
+      borderRadius: 12, transition: 'outline-color .15s, background .15s',
+      outline: `2px dashed ${sobre ? C.coral : 'transparent'}`, outlineOffset: 6,
+      background: sobre ? C.coral + '14' : 'transparent',
+    }}>
       {photos.map((p, i) => (
         <div key={i} style={{ width: 96, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ position: 'relative', height: 72, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.line}` }}>
@@ -227,7 +290,10 @@ function DraftPhotos({ photos, onChange }) {
             style={{ width: '100%', boxSizing: 'border-box', background: C.cream, border: `1px solid ${C.line}`, borderRadius: 8, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, color: C.ink }} />
         </div>
       ))}
-      <Button type="button" onClick={() => inputRef.current.click()} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] border-dashed w-full !py-3">+</Button>
+      <Button type="button" onClick={() => inputRef.current.click()} title="Clique pra escolher ou arraste fotos pra cá"
+        className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] border-dashed w-full !py-3">
+        {sobre ? 'Solte as fotos aqui' : '+'}
+      </Button>
       <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={escolher} />
     </div>
   );
@@ -703,6 +769,20 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
   );
 }
 
+function PhotoDropRow({ onFiles, ativo, style, children }) {
+  const C = getTheme();
+  const [sobre, dropProps] = useFileDrop(onFiles, ativo);
+  return (
+    <div {...dropProps} style={{
+      ...style, borderRadius: 12, transition: 'outline-color .15s, background .15s',
+      outline: `2px dashed ${sobre ? C.coral : 'transparent'}`, outlineOffset: 3,
+      background: sobre ? C.coral + '14' : 'transparent',
+    }}>
+      {children}
+    </div>
+  );
+}
+
 function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReorder }) {
   const C = getTheme();
   const inputRef = useRef(null);
@@ -722,8 +802,7 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
   };
 
   const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (file) onAdd(file, pendingTitleRef.current);
+    Array.from(e.target.files || []).forEach(file => onAdd(file, pendingTitleRef.current));
     pendingTitleRef.current = null;
     e.target.value = '';
   };
@@ -803,7 +882,7 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
   );
 
   const addBtn = (title) => (
-    <Button onClick={() => pickFile(title)} title="Adicionar foto" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] border-dashed shrink-0 w-[72px] h-[72px] !rounded-xl text-[22px]">+</Button>
+    <Button onClick={() => pickFile(title)} title="Adicionar foto (clique ou arraste pra cá)" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] border-dashed shrink-0 w-[72px] h-[72px] !rounded-xl text-[22px]">+</Button>
   );
 
   const draftInput = {
@@ -832,16 +911,18 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
                 {desc && <div style={{ fontSize: 12, fontWeight: 500, color: C.sub, marginTop: 1, lineHeight: 1.4 }}>{desc}</div>}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
+            <PhotoDropRow ativo={canEdit} onFiles={fs => fs.forEach(f => onAdd(f, g.title))}
+              style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
               {g.items.map(thumb)}
               {canEdit && addBtn(g.title)}
-            </div>
+            </PhotoDropRow>
           </div>
         );
       })}
 
       {(untitled.length > 0 || canEdit) && (
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', alignItems: 'flex-start' }}>
+        <PhotoDropRow ativo={canEdit} onFiles={fs => fs.forEach(f => onAdd(f, null))}
+          style={{ display: 'flex', gap: 6, overflowX: 'auto', alignItems: 'flex-start' }}>
           {untitled.map(ph => (
             canEdit ? (
               <div key={ph.id} style={{ flexShrink: 0, width: 110, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -852,10 +933,10 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
             ) : thumb(ph)
           ))}
           {canEdit && addBtn(null)}
-        </div>
+        </PhotoDropRow>
       )}
 
-      {canEdit && <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />}
+      {canEdit && <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFile} />}
 
       {openId && <PhotoLightbox photos={ordered} openId={openId} onSetId={setOpenId} onClose={() => setOpenId(null)} />}
     </div>
