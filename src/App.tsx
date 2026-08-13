@@ -287,6 +287,29 @@ export default function App() {
     });
   }, [visiblePlaces, lists, itineraryOpen]);
 
+  // Abrir uma lista no desktop enquadra a lista inteira: a câmera vai pro meio
+  // dos lugares e abre o zoom até todos caberem. Só no desktop porque no
+  // celular a lista ocupa a tela e o mapa nem está à vista.
+  //
+  // O ref evita reenquadrar a cada mudança em places: quem está mexendo na
+  // lista aberta (guardando foto, editando lugar) não pode ver a câmera pular.
+  // Enquadra uma vez por lista aberta, e de novo se a lista for reaberta.
+  const listaEnquadrada = useRef(null);
+  useEffect(() => {
+    const m = leafRef.current;
+    if (!m || !isDesktop || !openListId) {
+      listaEnquadrada.current = null;
+      return;
+    }
+    if (listaEnquadrada.current === openListId) return;
+    const daLista = visiblePlaces.filter(p => (p.list_ids || []).includes(openListId));
+    // Lista ainda carregando (ou toda escondida por filtro): tenta de novo
+    // quando os lugares chegarem, em vez de marcar como enquadrada.
+    if (daLista.length === 0) return;
+    listaEnquadrada.current = openListId;
+    mapa.fitPlaces(m, daLista, selId ? 240 : 60);
+  }, [openListId, isDesktop, visiblePlaces]);
+
   // Filtrar até esconder o lugar aberto deixaria um card solto na tela, sem pin.
   useEffect(() => {
     if (selId && !visiblePlaces.some(p => p.id === selId)) setSelId(null);

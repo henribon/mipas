@@ -203,6 +203,33 @@ export function drawRoute(
   map.fitBounds(limites, { paddingTopLeft: [40, 90], paddingBottomRight: [40, cardHeight] });
 }
 
+/**
+ * Põe a câmera em volta de um conjunto de lugares: acha o retângulo que
+ * contém todos e abre o zoom até caber. Um lugar só não tem retângulo — aí é
+ * só ir até ele, sem colar a câmera no chão.
+ *
+ * `maxZoom` existe pro caso de dois bares na mesma esquina: sem ele o
+ * enquadramento cairia no zoom máximo e o mapa viraria uma calçada.
+ */
+export function fitPlaces(map: L.Map, places: any[], cardHeight = 60) {
+  const pontos = (places || [])
+    .filter(p => p && p.latitude != null && p.longitude != null)
+    .map(p => [p.latitude, p.longitude] as [number, number]);
+  if (pontos.length === 0) return;
+  if (pontos.length === 1) {
+    map.flyTo(pontos[0], Math.max(map.getZoom(), 15), { duration: .7 });
+    return;
+  }
+  // A folga de cima é a barra de busca e os botões flutuantes; a de baixo, o
+  // card do lugar quando está aberto.
+  map.flyToBounds(L.latLngBounds(pontos), {
+    paddingTopLeft: [50, 90],
+    paddingBottomRight: [50, cardHeight],
+    maxZoom: 16,
+    duration: .7,
+  });
+}
+
 function buildStopIcon(numero: number, color: string) {
   return L.divIcon({
     className: '',
