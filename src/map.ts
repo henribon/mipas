@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import { haversineKm } from '@/geocoding';
 
 /**
  * A foto que representa o lugar no mapa: a escolhida a dedo, quando existe, e
@@ -70,7 +71,7 @@ const LADO_MINIATURA = 200;
  * pedir pro navegador rasterizar 12 milhões de pixels pra mostrar mil — e o
  * Chromium às vezes simplesmente desiste, deixando o círculo vazio sem dar
  * erro nenhum. Então o mapa desenha a sua própria miniatura, uma vez por foto,
- * e usa esse recorte quadrado de 68px no lugar da foto original.
+ * e usa esse recorte quadrado no lugar da foto original.
  */
 function gerarMiniatura(id: string, url: string): Promise<string | null> {
   const pronta = miniaturas.get(id);
@@ -211,11 +212,44 @@ export function drawRoute(
  * `maxZoom` existe pro caso de dois bares na mesma esquina: sem ele o
  * enquadramento cairia no zoom máximo e o mapa viraria uma calçada.
  */
-export function fitPlaces(map: L.Map, places: any[], cardHeight = 60) {
+/**
+ * Descarta lugares absurdamente longe do miolo antes de enquadrar. Um lugar
+ * de teste em outro continente (ou uma viagem antiga) faria o zoom abrir tanto
+ * que a cidade inteira viraria um ponto só — e o enquadramento inicial deixaria
+ * de dizer qualquer coisa. O limite é generoso de propósito: 500 km cobre o
+ * estado e os vizinhos, então SP e Rio continuam cabendo juntos.
+ */
+export function semExtremos(places: any[]) {
+  const validos = (places || []).filter(p => p && p.latitude != null && p.longitude != null);
+  if (validos.length < 3) return validos;
+  const mediana = (nums: number[]) => {
+    const ord = [...nums].sort((a, b) => a - b);
+    return ord[Math.floor(ord.length / 2)];
+  };
+  const centroLat = mediana(validos.map(p => p.latitude));
+  const centroLng = mediana(validos.map(p => p.longitude));
+  const distancia = (p: any) => haversineKm(centroLat, centroLng, p.latitude, p.longitude);
+  const limite = Math.max(500, mediana(validos.map(distancia)) * 5);
+  const doMiolo = validos.filter(p => distancia(p) <= limite);
+  // Se a regra derrubar todo mundo (não deveria), é melhor enquadrar tudo do
+  // que não enquadrar nada.
+  return doMiolo.length ? doMiolo : validos;
+}
+
+export function fitPlaces(map: L.Map, places: any[], cardHeight = 60, zoomMaximo = 16) {
   const pontos = (places || [])
     .filter(p => p && p.latitude != null && p.longitude != null)
     .map(p => [p.latitude, p.longitude] as [number, number]);
   if (pontos.length === 0) return;
+  // Enquadrar antes do mapa ter tamanho na tela dá divisão por zero no cálculo
+  // do zoom: sai NaN e o Leaflet derruba a aplicação inteira. No primeiro
+  // instante o container ainda não foi medido, então esperamos ele aparecer —
+  // o invalidateSize que o app já dispara na abertura emite esse "resize".
+  const tamanho = map.getSize();
+  if (!tamanho.x || !tamanho.y) {
+    map.once('resize', () => fitPlaces(map, places, cardHeight, zoomMaximo));
+    return;
+  }
   if (pontos.length === 1) {
     map.flyTo(pontos[0], Math.max(map.getZoom(), 15), { duration: .7 });
     return;
@@ -275,6 +309,101 @@ export function drawItinerary(
   map.fitBounds(L.latLngBounds(todos), { paddingTopLeft: [40, 90], paddingBottomRight: [40, cardHeight] });
 }
 
+// ---------------------------------------------------------
+// Agrupamento de pins
+// Dois lugares na mesma quadra viram dois pins colados e o de trás fica
+// impossível de clicar. Em vez de deixar a pilha, os que se encostam viram um
+// marcador só com a contagem; clicar nele aproxima até eles se separarem.
+// ---------------------------------------------------------
+
+/** Distância em pixels abaixo da qual dois pins se atrapalham na tela. */
+const RAIO_AGRUPAMENTO = 46;
+
+type Grupo = { places: any[]; lat: number; lng: number };
+
+/**
+ * Agrupa por distância na tela, não por coordenada: o que importa é se os pins
+ * se encostam no zoom atual. Guloso e O(n²) — com dezenas de lugares isso é
+ * instantâneo, e evita a costura torta que uma grade fixa deixaria quando dois
+ * pontos vizinhos caem em células diferentes.
+ */
+function agrupar(map: L.Map, places: any[]): Grupo[] {
+  const pontos = places.map(p => ({ p, xy: map.latLngToLayerPoint([p.latitude, p.longitude]) }));
+  const usados = new Array(pontos.length).fill(false);
+  const grupos: Grupo[] = [];
+  pontos.forEach((a, i) => {
+    if (usados[i]) return;
+    usados[i] = true;
+    const juntos = [a.p];
+    pontos.forEach((b, j) => {
+      if (usados[j] || j === i) return;
+      if (a.xy.distanceTo(b.xy) > RAIO_AGRUPAMENTO) return;
+      usados[j] = true;
+      juntos.push(b.p);
+    });
+    grupos.push(comCentro(juntos));
+  });
+  return fundirProximos(map, grupos);
+}
+
+const comCentro = (places: any[]): Grupo => ({
+  places,
+  lat: places.reduce((s, p) => s + p.latitude, 0) / places.length,
+  lng: places.reduce((s, p) => s + p.longitude, 0) / places.length,
+});
+
+/**
+ * O centro de um grupo não fica onde estava a semente dele, então dois grupos
+ * recém-formados podem terminar mais perto um do outro do que o raio permite —
+ * exatamente a sobreposição que o agrupamento existe pra evitar. Esta passada
+ * funde os que ficaram colados, até ninguém mais se encostar.
+ */
+function fundirProximos(map: L.Map, grupos: Grupo[]): Grupo[] {
+  const atuais = [...grupos];
+  for (let volta = 0; volta < 10; volta++) {
+    const pontos = atuais.map(g => map.latLngToLayerPoint([g.lat, g.lng]));
+    let fundiu = false;
+    for (let i = 0; i < atuais.length && !fundiu; i++) {
+      for (let j = i + 1; j < atuais.length; j++) {
+        if (pontos[i].distanceTo(pontos[j]) > RAIO_AGRUPAMENTO) continue;
+        atuais[i] = comCentro([...atuais[i].places, ...atuais[j].places]);
+        atuais.splice(j, 1);
+        fundiu = true;
+        break;
+      }
+    }
+    if (!fundiu) break;
+  }
+  return atuais;
+}
+
+function buildClusterIcon(color: string, quantidade: number, animar: boolean) {
+  const lado = quantidade > 9 ? 42 : 36;
+  return L.divIcon({
+    className: '',
+    iconSize: [lado, lado],
+    iconAnchor: [lado / 2, lado / 2],
+    html: `<div class="${animar ? 'pin-anim' : ''}" title="${quantidade} lugares aqui — clique pra separar"
+        style="width:${lado}px;height:${lado}px;border-radius:99px;background:${color};border:2.5px solid #fff;
+        box-shadow:0 3px 8px rgba(0,0,0,.4);color:#fff;font-family:Inter,sans-serif;
+        font-size:${quantidade > 9 ? 14 : 15}px;font-weight:800;cursor:pointer;
+        display:flex;align-items:center;justify-content:center">${quantidade}</div>`,
+  });
+}
+
+type EstadoMarcadores = {
+  map: L.Map;
+  markersRef: { current: Record<string, L.Marker> };
+  places: any[];
+  lists: any[];
+  onMarkerClick: (p: any) => void;
+};
+
+// Mudar o zoom muda quais pins se encostam, então o agrupamento é refeito a
+// cada zoom com os últimos dados recebidos.
+let ultimoEstado: EstadoMarcadores | null = null;
+let mapaOuvindoZoom: L.Map | null = null;
+
 export function syncMarkers(
   map: L.Map,
   markersRef: { current: Record<string, L.Marker> },
@@ -282,20 +411,48 @@ export function syncMarkers(
   lists: any[],
   onMarkerClick: (p: any) => void,
 ) {
+  ultimoEstado = { map, markersRef, places, lists, onMarkerClick };
+  if (mapaOuvindoZoom !== map) {
+    mapaOuvindoZoom = map;
+    // Reagrupar não é dado novo: sem a animação de queda, senão o mapa inteiro
+    // pularia a cada zoom.
+    map.on('zoomend', () => { if (ultimoEstado) desenharMarcadores(ultimoEstado, false); });
+  }
+  desenharMarcadores(ultimoEstado, true);
+}
+
+function desenharMarcadores(estado: EstadoMarcadores, animar: boolean) {
+  const { map, markersRef, places, lists, onMarkerClick } = estado;
   Object.values(markersRef.current).forEach(mk => mk.remove());
   markersRef.current = {};
-  places.forEach(p => {
-    const list = lists.find(l => (p.list_ids || []).includes(l.id));
-    const capa = coverPhoto(p);
+  const validos = (places || []).filter(p => p && p.latitude != null && p.longitude != null);
+  agrupar(map, validos).forEach((grupo, i) => {
+    const primeiro = grupo.places[0];
+    const list = lists.find(l => (primeiro.list_ids || []).includes(l.id));
+
+    if (grupo.places.length > 1) {
+      const marker = L.marker([grupo.lat, grupo.lng], {
+        icon: buildClusterIcon(list ? list.color : '#FF5C38', grupo.places.length, animar),
+      }).addTo(map);
+      // Zoom mais fundo que o de lista: aqui o objetivo é justamente descolar
+      // pins que estão a poucos metros um do outro.
+      marker.on('click', () => fitPlaces(map, grupo.places, 60, 18));
+      markersRef.current['grupo:' + i] = marker;
+      return;
+    }
+
+    const capa = coverPhoto(primeiro);
     const mini = capa ? miniaturas.get(capa.id) : null;
-    const marker = L.marker([p.latitude, p.longitude], { icon: buildMarkerIcon(list, mini) }).addTo(map);
-    marker.on('click', () => onMarkerClick(p));
-    markersRef.current[p.id] = marker;
+    const marker = L.marker([primeiro.latitude, primeiro.longitude], {
+      icon: buildMarkerIcon(list, mini, animar),
+    }).addTo(map);
+    marker.on('click', () => onMarkerClick(primeiro));
+    markersRef.current[primeiro.id] = marker;
     // Sem miniatura pronta o pin nasce com o emoji e ganha a foto quando ela
     // fica pronta — nunca fica esperando download pra aparecer no mapa.
     if (capa && !mini) {
       gerarMiniatura(capa.id, capa.url).then(nova => {
-        if (nova && markersRef.current[p.id] === marker) marker.setIcon(buildMarkerIcon(list, nova, false));
+        if (nova && markersRef.current[primeiro.id] === marker) marker.setIcon(buildMarkerIcon(list, nova, false));
       });
     }
   });

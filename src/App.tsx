@@ -287,6 +287,22 @@ export default function App() {
     });
   }, [visiblePlaces, lists, itineraryOpen]);
 
+  // O mapa abria sempre no mesmo ponto fixo de São Paulo, num zoom que
+  // amontoava os pins num canto (ou deixava tudo fora da tela). Na primeira
+  // carga ele passa a enquadrar os seus lugares. Uma vez só: depois disso a
+  // câmera é sua, e mexer nela sozinho no meio do uso seria pior que o zoom fixo.
+  const enquadrouAoAbrir = useRef(false);
+  useEffect(() => {
+    const m = leafRef.current;
+    if (!m || enquadrouAoAbrir.current) return;
+    // Lista aberta por link compartilhado já tem quem a enquadre.
+    if (openListId) return;
+    const doMiolo = mapa.semExtremos(visiblePlaces);
+    if (doMiolo.length === 0) return;
+    enquadrouAoAbrir.current = true;
+    mapa.fitPlaces(m, doMiolo);
+  }, [visiblePlaces, openListId]);
+
   // Abrir uma lista no desktop enquadra a lista inteira: a câmera vai pro meio
   // dos lugares e abre o zoom até todos caberem. Só no desktop porque no
   // celular a lista ocupa a tela e o mapa nem está à vista.
