@@ -108,9 +108,17 @@ function gerarMiniatura(id: string, url: string): Promise<string | null> {
 export function initMap(container: HTMLElement) {
   const map = L.map(container, { zoomControl: false, attributionControl: true });
   map.setView([-23.561, -46.656], 12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '© OpenStreetMap contributors © CARTO',
-    subdomains: 'abcd',
+  // O CARTO (Positron) passou a exigir chave de API e carimbou "API KEY
+  // REQUIRED" por cima do mapa. Estes tiles são do próprio OpenStreetMap:
+  // sem chave, sem cadastro e sem carimbo. Eles são mais coloridos que o
+  // Positron, então quem devolve o tom apagado do Mipas é o filtro CSS de
+  // .leaflet-tile-pane no index.css.
+  //
+  // maxNativeZoom: o OSM só serve tile até o zoom 19; acima disso o Leaflet
+  // estica o último tile em vez de pedir uma imagem que não existe.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxNativeZoom: 19,
     maxZoom: 20,
   }).addTo(map);
   return map;

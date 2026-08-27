@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
@@ -353,21 +353,217 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inli
   );
 }
 
+/**
+ * Busca de endereço dentro da própria folha. Quem cadastra um lugar novo a
+ * partir da lista não passa pela busca do mapa — é aqui que o pin nasce.
+ */
+function AddressPicker({ onPick, autoFocus }) {
+  const C = getTheme();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  const debouncedSearch = useMemo(() => debounce(async (q) => {
+    if (!q.trim()) { setResults([]); return; }
+    setSearching(true);
+    try {
+      setResults(await geocodeAddress(q));
+    } catch (e) {
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, 600), []);
+
+  const buscar = (v) => { setQuery(v); debouncedSearch(v); };
+
+  return (
+    <div>
+      <input autoFocus={autoFocus} value={query} onChange={e => buscar(e.target.value)} placeholder="Rua, praça, avenida…"
+        style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+      {searching && <div style={{ textAlign: 'center', marginTop: 12, color: C.sub, fontWeight: 600, fontSize: 13 }}>Buscando…</div>}
+      {!searching && query.trim() && results.length === 0 && (
+        <div style={{ textAlign: 'center', marginTop: 12, color: C.sub, fontWeight: 600, fontSize: 13 }}>Nada por aqui... tenta outro endereço</div>
+      )}
+      {results.map((r, i) => (
+        <div key={i} onClick={() => onPick(r)}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 4px', borderBottom: `1px solid ${C.line}`, cursor: 'pointer' }}>
+          <svg width="12" height="16" viewBox="0 0 12 16" style={{ flexShrink: 0 }}>
+            <path d="M6 15.5C6 15.5 11 9.7 11 5.7C11 2.9 8.8 1 6 1C3.2 1 1 2.9 1 5.7C1 9.7 6 15.5 6 15.5Z" fill="none" stroke={C.coral} strokeWidth="1.4" />
+            <circle cx="6" cy="5.6" r="1.8" fill={C.coral} />
+          </svg>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.35 }}>{r.address}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Menu de botão direito. Vive num portal pra não ser recortado pelo card que o
+ * abriu, nasce no cursor e vira pra dentro quando não cabe até a borda.
+ *
+ * Cada item é `{ rotulo, onClick }`; `perigo` pinta de vermelho, `separadorAntes`
+ * abre um traço acima, e `cores` troca o item por um submenu de bolinhas.
+ */
+function ContextMenu({ x, y, itens, onClose }) {
+  const C = getTheme();
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ left: x, top: y, pronto: false });
+  const [submenu, setSubmenu] = useState(null);
+
+  // Medir antes de pintar: sem isto o menu aberto perto da borda aparece meio
+  // fora da tela e só então pula pro lugar certo.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({
+      left: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)),
+      top: Math.max(8, Math.min(y, window.innerHeight - r.height - 8)),
+      pronto: true,
+    });
+  }, [x, y]);
+
+  useEffect(() => {
+    const fechar = () => onClose();
+    const naTecla = (ev) => { if (ev.key === 'Escape') onClose(); };
+    // O gesto que abriu o menu ainda está subindo pelo DOM; esperar um tique
+    // evita que ele mesmo feche o menu que acabou de nascer.
+    const tique = setTimeout(() => {
+      window.addEventListener('pointerdown', fechar);
+      window.addEventListener('contextmenu', fechar);
+      window.addEventListener('resize', fechar);
+      window.addEventListener('scroll', fechar, true);
+      window.addEventListener('keydown', naTecla);
+    }, 0);
+    return () => {
+      clearTimeout(tique);
+      window.removeEventListener('pointerdown', fechar);
+      window.removeEventListener('contextmenu', fechar);
+      window.removeEventListener('resize', fechar);
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('keydown', naTecla);
+    };
+  }, [onClose]);
+
+  const estiloItem = {
+    width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8,
+    background: 'transparent', border: 'none', borderRadius: 8, padding: '8px 10px',
+    fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: C.ink,
+    cursor: 'pointer', textAlign: 'left',
+  } as React.CSSProperties;
+  const realce = (ev, ligado) => { ev.currentTarget.style.background = ligado ? C.cream : 'transparent'; };
+
+  // Perto da borda direita o submenu abriria pra fora da tela.
+  const paraEsquerda = pos.left > window.innerWidth - 400;
+
+  return ReactDOM.createPortal(
+    <div ref={ref}
+      onPointerDown={ev => ev.stopPropagation()}
+      onContextMenu={ev => { ev.preventDefault(); ev.stopPropagation(); }}
+      style={{
+        position: 'fixed', left: pos.left, top: pos.top, zIndex: 4000, minWidth: 196,
+        visibility: pos.pronto ? 'visible' : 'hidden', background: C.surface,
+        border: `1px solid ${C.line}`, borderRadius: 12, padding: 5,
+        boxShadow: '0 18px 45px rgba(0,0,0,.45)', animation: 'fadeIn .12s',
+      }}>
+      {itens.filter(Boolean).map((it, i) => (
+        <React.Fragment key={i}>
+          {it.separadorAntes && <div style={{ height: 1, background: C.line, margin: '5px 6px' }} />}
+          {it.cores ? (
+            <div style={{ position: 'relative' }} onMouseEnter={() => setSubmenu(i)}>
+              <button type="button"
+                onClick={ev => { ev.stopPropagation(); setSubmenu(submenu === i ? null : i); }}
+                onMouseEnter={ev => realce(ev, true)} onMouseLeave={ev => realce(ev, false)}
+                style={estiloItem}>
+                <span style={{ width: 12, height: 12, borderRadius: 99, background: it.cores.atual, flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{it.rotulo}</span>
+                <span style={{ opacity: .5, fontSize: 15, lineHeight: 1 }}>{paraEsquerda ? '\u2039' : '\u203A'}</span>
+              </button>
+              {submenu === i && (
+                <div onPointerDown={ev => ev.stopPropagation()}
+                  style={{
+                    position: 'absolute', top: -5, [paraEsquerda ? 'right' : 'left']: '100%',
+                    marginLeft: paraEsquerda ? 0 : 6, marginRight: paraEsquerda ? 6 : 0,
+                    display: 'flex', gap: 7, padding: 9, background: C.surface,
+                    border: `1px solid ${C.line}`, borderRadius: 12,
+                    boxShadow: '0 18px 45px rgba(0,0,0,.45)', animation: 'fadeIn .12s',
+                  }}>
+                  {it.cores.opcoes.map(cor => (
+                    <button key={cor} type="button" title={cor}
+                      onClick={ev => { ev.stopPropagation(); it.cores.onEscolher(cor); }}
+                      style={{
+                        width: 24, height: 24, borderRadius: 99, background: cor, cursor: 'pointer',
+                        border: `2.5px solid ${it.cores.atual === cor ? C.ink : 'transparent'}`,
+                      }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button type="button"
+              onClick={ev => { ev.stopPropagation(); onClose(); it.onClick(); }}
+              onMouseEnter={ev => { realce(ev, true); setSubmenu(null); }}
+              onMouseLeave={ev => realce(ev, false)}
+              style={{ ...estiloItem, color: it.perigo ? '#FF6B5B' : C.ink }}>
+              {it.rotulo}
+            </button>
+          )}
+        </React.Fragment>
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * Liga o botão direito num alvo identificado por id. Guardar o id (e não o
+ * objeto) faz o menu se redesenhar sozinho quando o alvo muda — trocar a cor
+ * marca a bolinha nova sem fechar o menu.
+ */
+function useContextMenu() {
+  const [menu, setMenu] = useState(null);
+  const abrir = (id) => (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setMenu({ id, x: ev.clientX, y: ev.clientY });
+  };
+  return [menu, abrir, () => setMenu(null)];
+}
+
 function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving }) {
   const C = getTheme();
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const listIds = draft.list_ids || [];
   const alternaLista = (id) => set('list_ids', listIds.includes(id) ? listIds.filter(x => x !== id) : [...listIds, id]);
-  const canSave = draft.name.trim() && listIds.length > 0 && !saving;
+  // Cadastro que começa pela lista chega aqui sem endereço nenhum: ele é
+  // escolhido dentro da folha, e sem coordenada não existe pin pra guardar.
+  const temEndereco = draft.lat != null && draft.lng != null;
+  const canSave = draft.name.trim() && listIds.length > 0 && temEndereco && !saving;
+  const trocarEndereco = () => setDraft(d => ({ ...d, address: '', lat: null, lng: null }));
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 850 }}>
       <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
       <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', maxHeight: '86%', overflow: 'auto', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
-        <div style={{ fontFamily: 'Inter', fontSize: 19, fontWeight: 700, color: C.ink }}>Guardar esse lugar</div>
-        <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 3, lineHeight: 1.4 }}>{draft.address}</div>
+        <div style={{ fontFamily: 'var(--display-font)', fontSize: 19, fontWeight: 400, color: C.ink }}>{temEndereco ? 'Guardar esse lugar' : 'Novo lugar'}</div>
+        {temEndereco ? (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 3 }}>
+            <div style={{ flex: 1, color: C.sub, fontWeight: 500, fontSize: 13, lineHeight: 1.4 }}>{draft.address}</div>
+            <Button onClick={trocarEndereco} variant="plain" size="xs" className="shrink-0 !px-0">trocar</Button>
+          </div>
+        ) : (
+          <React.Fragment>
+            <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 3, lineHeight: 1.4 }}>
+              Comece pelo endereço — é ele que põe o pin no mapa.
+            </div>
+            <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Endereço</div>
+            <AddressPicker autoFocus onPick={r => setDraft(d => ({ ...d, address: r.address, lat: r.lat, lng: r.lng }))} />
+          </React.Fragment>
+        )}
         <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Dê um nome só seu</div>
-        <input autoFocus value={draft.name} onChange={e => set('name', e.target.value)} placeholder='Ex: "Melhor pastel da cidade"'
+        <input autoFocus={temEndereco} value={draft.name} onChange={e => set('name', e.target.value)} placeholder='Ex: "Melhor pastel da cidade"'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Em quais listas? <span style={{ color: C.sub, fontWeight: 500 }}>(pode ser mais de uma)</span></div>
         <ListPicker lists={lists} selecionadas={listIds} onAlternar={alternaLista} onNewList={onNewList} inline />
@@ -405,11 +601,14 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
   );
 }
 
-function NewListSheet({ onCancel, onCreate, creating }) {
+/** Mesma folha pra criar e pra editar: muda o título, o botão e de onde vêm os
+ *  valores iniciais. Sem ela não havia como renomear uma lista nem trocar o emoji. */
+function ListSheet({ list = null, onCancel, onCreate, creating }) {
   const C = getTheme();
-  const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState('📍');
-  const [color, setColor] = useState(listColors[0]);
+  const editando = !!list;
+  const [name, setName] = useState(list ? list.name : '');
+  const [emoji, setEmoji] = useState(list ? list.emoji : '📍');
+  const [color, setColor] = useState(list ? list.color : listColors[0]);
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 900 }}>
       <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
@@ -417,7 +616,7 @@ function NewListSheet({ onCancel, onCreate, creating }) {
         <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 48, height: 48, borderRadius: 14, background: color + '22', border: `1px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{emoji || '?'}</div>
-          <div style={{ fontFamily: 'Inter', fontSize: 19, fontWeight: 700, color: C.ink }}>Nova lista</div>
+          <div style={{ fontFamily: 'var(--display-font)', fontSize: 19, fontWeight: 400, color: C.ink }}>{editando ? 'Editar lista' : 'Nova lista'}</div>
         </div>
         <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder='Ex: "Sorveterias pra testar"'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 14, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
@@ -438,7 +637,9 @@ function NewListSheet({ onCancel, onCreate, creating }) {
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
-          <Btn primary disabled={!name.trim() || !emoji.trim() || creating} onClick={() => name.trim() && onCreate({ name: name.trim(), emoji: emoji.trim(), color })} style={{ flex: 2 }}>{creating ? 'Criando…' : 'Criar lista'}</Btn>
+          <Btn primary disabled={!name.trim() || !emoji.trim() || creating} onClick={() => name.trim() && onCreate({ name: name.trim(), emoji: emoji.trim(), color })} style={{ flex: 2 }}>
+            {creating ? (editando ? 'Salvando…' : 'Criando…') : (editando ? 'Salvar' : 'Criar lista')}
+          </Btn>
         </div>
       </div>
     </div>
@@ -493,7 +694,7 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
       <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
       <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', maxHeight: '86%', overflow: 'auto', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
-        <div style={{ fontFamily: 'Inter', fontSize: 19, fontWeight: 700, color: C.ink }}>Sua casa</div>
+        <div style={{ fontFamily: 'var(--display-font)', fontSize: 19, fontWeight: 400, color: C.ink }}>Sua casa</div>
         <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 3, lineHeight: 1.4 }}>
           Usada só pra calcular distância nas suas listas. Nunca aparece pra quem visualiza uma lista pública.
         </div>
@@ -543,8 +744,22 @@ function AddressLink({ place, fontSize }) {
   );
 }
 
-function InstagramButton({ handle }) {
+function InstagramButton({ handle, compacto = false }) {
+  const C = getTheme();
   const url = /^https?:\/\//i.test(handle) ? handle : 'https://instagram.com/' + handle.replace(/^@/, '');
+  // Na linha "endereço / instagram" do item da lista a pílula colorida gritaria
+  // mais que o nome do lugar; ali entra só o arroba, no tom do endereço.
+  if (compacto) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
+        title="Abrir no Instagram"
+        style={{ color: C.sub, fontWeight: 600, fontSize: 11.5, textDecoration: 'none' }}
+        onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+        onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}>
+        @{String(handle).replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/\/$/, '')}
+      </a>
+    );
+  }
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()} style={{
       display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none',
@@ -590,7 +805,7 @@ function PlaceCard({ place, list, onClose, refKm, refTipo, route, routeLoading, 
   return (
     <WindowCard style={{ position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 750, boxShadow: '0 14px 40px rgba(0,0,0,.5)', animation: 'sheetUp .28s cubic-bezier(.2,.9,.3,1)' }}>
       <div style={{ height: 64, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: gradientForPlace(place, list) }}>
-        <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 16, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 52px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+        <div style={{ fontFamily: 'var(--display-font)', fontWeight: 400, fontSize: 16, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 52px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
           {place.name}
         </div>
         <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.4)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.ink }}>✕</button>
@@ -648,7 +863,7 @@ function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
       <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
       <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', maxHeight: '86%', overflow: 'auto', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
-        <div style={{ fontFamily: 'Inter', fontSize: 19, fontWeight: 700, color: C.ink }}>Quero ir aqui</div>
+        <div style={{ fontFamily: 'var(--display-font)', fontSize: 19, fontWeight: 400, color: C.ink }}>Quero ir aqui</div>
         <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 3, lineHeight: 1.4 }}>{draft.address}</div>
 
         <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Nome do lugar</div>
@@ -692,7 +907,7 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onBack, seletor, va
       )}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title" style={{ fontFamily: 'Inter', fontSize: isPanel ? 20 : 24, fontWeight: 700, color: C.ink, flex: 1 }}>Quero ir</div>
+        <div className="section-title" style={{ fontFamily: 'var(--display-font)', fontSize: isPanel ? 20 : 24, fontWeight: 400, color: C.ink, flex: 1 }}>Quero ir</div>
         <AddButton rotulo="Quero ir num lugar novo" onClick={onNew} />
       </div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13, marginTop: 2 }}>
@@ -706,7 +921,7 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onBack, seletor, va
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
         {comDistancia.map(w => (
           <WindowCard key={w.id} bodyClassName="px-3.5 py-3">
-            <div style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.ink }}>{w.name}</div>
+            <div style={{ fontFamily: 'var(--display-font)', fontWeight: 400, fontSize: 15, color: C.ink }}>{w.name}</div>
             <div style={{ marginTop: 3 }}>
               <AddressLink place={w} fontSize={12.5} />
             </div>
@@ -734,9 +949,12 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onBack, seletor, va
   );
 }
 
-function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, seletor, variant }) {
+function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, seletor, variant, menuDaLista }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
+  const [menu, abrirMenu, fecharMenu] = useContextMenu();
+  // Pelo id, não pelo objeto: assim trocar a cor redesenha o menu já aberto.
+  const listaDoMenu = menu ? lists.find(l => l.id === menu.id) : null;
   return (
     <div style={isPanel
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
@@ -746,7 +964,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
       )}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title" style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 700, color: C.ink, flex: 1 }}>{canEdit ? 'Minhas listas' : 'Lista do Bon'}</div>
+        <div className="section-title" style={{ fontFamily: 'var(--display-font)', fontSize: 24, fontWeight: 400, color: C.ink, flex: 1 }}>{canEdit ? 'Minhas listas' : 'Lista do Bon'}</div>
         {canEdit && <AddButton rotulo="Criar lista" onClick={onNewList} />}
       </div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
@@ -754,7 +972,8 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
         {lists.map(l => {
           const count = places.filter(p => (p.list_ids || []).includes(l.id)).length;
           return (
-            <WindowCard key={l.id} onClick={() => onOpenList(l.id)} bodyClassName="flex items-center gap-3.5 p-4">
+            <WindowCard key={l.id} onClick={() => onOpenList(l.id)} bodyClassName="flex items-center gap-3.5 p-4"
+              onContextMenu={menuDaLista ? abrirMenu(l.id) : undefined}>
               <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
@@ -765,6 +984,12 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
           );
         })}
       </div>
+
+      {/* menuDaLista some quando a sessão cai: sem esta guarda, um menu aberto
+          na hora do logout derrubaria o painel inteiro. */}
+      {listaDoMenu && menuDaLista && (
+        <ContextMenu x={menu.x} y={menu.y} itens={menuDaLista(listaDoMenu)} onClose={fecharMenu} />
+      )}
     </div>
   );
 }
@@ -1019,6 +1244,37 @@ const NUMERIC_SORT_ACCESSORS = {
   valor: p => p.avg_price,
 };
 
+/**
+ * Foto de capa do lugar preenchendo a coluna da esquerda do item. Sem foto
+ * fica o emoji da lista no mesmo espaço, senão a coluna de textos ao lado
+ * mudaria de altura de item pra item.
+ */
+function PlaceThumb({ place, list, onClick }) {
+  const C = getTheme();
+  const capa = coverPhoto(place);
+  const nFotos = (place.photos || []).length;
+  return (
+    <div onClick={onClick || undefined} title={capa ? 'Ver as fotos' : undefined}
+      style={{
+        flex: 1, minHeight: 118, position: 'relative', overflow: 'hidden',
+        background: gradientForPlace(place, list),
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: capa && onClick ? 'zoom-in' : undefined,
+      }}>
+      {capa
+        ? <img src={capa.url} alt={capa.title || place.name} loading="lazy"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : <span style={{ fontSize: 34, opacity: .8 }}>{(list && list.emoji) || '📍'}</span>}
+      {nFotos > 1 && (
+        <span style={{
+          position: 'absolute', right: 6, bottom: 6, borderRadius: 999, padding: '1px 7px',
+          background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10.5, fontWeight: 800,
+        }}>{nFotos}</span>
+      )}
+    </div>
+  );
+}
+
 function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover }) {
   const C = getTheme();
 
@@ -1111,6 +1367,15 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
     <div key={texto} style={{ fontSize: 12, fontWeight: 700, color: cor || C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '4px 10px' }}>{texto}</div>
   );
 
+  // Embaixo da foto quem tem que saltar aos olhos é a nota; categoria, valor e
+  // distância são etiqueta de canto de olho, não informação de primeira leitura.
+  const tagMini = (texto, cor = null) => (
+    <span key={texto} style={{
+      fontSize: 9.5, fontWeight: 700, lineHeight: 1.5, letterSpacing: .2, whiteSpace: 'nowrap',
+      color: cor || C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '1px 6px',
+    }}>{texto}</span>
+  );
+
   const nFotos = (p.photos || []).length;
 
   const cliqueRef = useRef(null);
@@ -1124,52 +1389,91 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
     onOpenMap(p);
   };
 
+  // Clicar na foto do item abre a galeria em cima dela, sem abrir a edição.
+  const [fotoAberta, setFotoAberta] = useState(null);
+  const capa = coverPhoto(p);
+  const abrirFotos = capa
+    ? (ev) => { ev.stopPropagation(); clearTimeout(cliqueRef.current); setFotoAberta(capa.id); }
+    : null;
+
+  const outrasListas = (p.list_ids || []).filter(id => id !== list.id)
+    .map(id => (todasListas || []).find(l => l.id === id))
+    .filter(Boolean);
+  const semNadaNoRodape = p.rating == null && !p.category && p.avg_price == null
+    && p.distanceKm == null && !(list.ranking_enabled && rank != null) && outrasListas.length === 0;
+
   return (
     <WindowCard>
-      <div onClick={clique} onDoubleClick={duploClique} title="Clique para abrir, duplo clique para ver no mapa"
-        style={{ height: 56, background: gradientForPlace(p, list), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', cursor: 'pointer' }}>
-        <div style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 15, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 20px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
-          {p.name}
-        </div>
-      </div>
-
+      {/* Foto sobre nota/tags de um lado; nome, endereço e resenha do outro. */}
       <div onClick={expanded ? undefined : clique} onDoubleClick={expanded ? undefined : duploClique}
-        style={{ padding: '10px 14px 12px', cursor: expanded ? 'default' : 'pointer' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-          <AddressLink place={p} fontSize={12.5} />
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            <Button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] shrink-0">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M8 14.5S13 9 13 5.6A5 5 0 0 0 3 5.6C3 9 8 14.5 8 14.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-                <circle cx="8" cy="5.5" r="1.8" fill="currentColor" />
-              </svg>
-            </Button>
-            <Button onClick={ev => { ev.stopPropagation(); onToggle(); }} title={expanded ? 'Fechar' : (canEdit ? 'Editar este lugar' : 'Ver detalhes')} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px] shrink-0">{expanded ? 'fechar ▴' : (canEdit ? 'editar ▾' : 'detalhes ▾')}</Button>
+        title={expanded ? undefined : 'Clique para abrir, duplo clique para ver no mapa'}
+        // Altura fixa de propósito: é ela que dá o limite pra resenha rolar dentro
+        // do card (com altura livre o texto só esticaria o cartão) e faz a lista
+        // inteira ficar no mesmo ritmo, resenha curta ou longa.
+        style={{ display: 'flex', alignItems: 'stretch', height: 208, cursor: expanded ? 'default' : 'pointer' }}>
+
+        <div style={{ width: '40%', maxWidth: 200, minWidth: 112, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: `1px solid ${C.line}` }}>
+          <PlaceThumb place={p} list={list} onClick={abrirFotos} />
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', padding: '7px 9px', borderTop: `1px solid ${C.line}` }}>
+            {p.rating != null && (
+              <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 3, color: C.coral, lineHeight: 1, marginRight: 2 }}>
+                {/* A estrela não existe na fonte de título e cairia numa de
+                    sistema, fininha ao lado dos numerais pesados: menor, ela
+                    vira acento do número em vez de competir com ele. */}
+                <span style={{ fontSize: 11 }}>★</span>
+                <span style={{ fontFamily: 'var(--display-font)', fontSize: 16, fontWeight: 400 }}>{p.rating}</span>
+              </div>
+            )}
+            {list.ranking_enabled && rank != null && tagMini(`#${rank}`, C.coral)}
+            {p.category && tagMini(p.category)}
+            {p.avg_price != null && tagMini(`R$ ${Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+            {p.distanceKm != null && tagMini(p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`)}
+            {outrasListas.map(outra => tagMini(`${outra.emoji} ${outra.name}`, outra.color))}
+            {semNadaNoRodape && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.sub }}>sem nota ainda</span>}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
-          {p.distanceKm != null && chip(p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`)}
-          {p.category && chip(p.category)}
-          {p.rating != null && chip(`★ ${p.rating}`, C.coral)}
-          {p.avg_price != null && chip(`R$ ${Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
-          {list.ranking_enabled && rank != null && chip(`#${rank}`, C.coral)}
-          {p.instagram && <InstagramButton handle={p.instagram} />}
-          {nFotos > 0 && chip(`${nFotos} ${nFotos === 1 ? 'foto' : 'fotos'}`)}
-          {(p.list_ids || []).filter(id => id !== list.id).map(id => {
-            const outra = (todasListas || []).find(l => l.id === id);
-            return outra ? (
-              <div key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: outra.color, background: outra.color + '1E', borderRadius: 999, padding: '4px 10px' }}>
-                {outra.emoji} {outra.name}
-              </div>
-            ) : null;
-          })}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '11px 13px 10px' }}>
+          <div style={{ fontFamily: 'var(--display-font)', fontWeight: 400, fontSize: 15.5, letterSpacing: .3, textTransform: 'uppercase', color: C.ink, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
+            {p.name}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
+            <AddressLink place={p} fontSize={11.5} />
+            {p.instagram && (
+              <React.Fragment>
+                <span style={{ color: C.sub, fontSize: 11.5, fontWeight: 500 }}>/</span>
+                <InstagramButton handle={p.instagram} compacto />
+              </React.Fragment>
+            )}
+          </div>
+
+          {/* A resenha rola dentro do próprio card: dá pra ler inteira sem abrir
+              o lugar, e o cartão não estica conforme o tamanho do texto. */}
+          <div className="resenha-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 8, paddingRight: 4 }}>
+            {!expanded && p.description && (
+              <RichText html={p.description} style={{ fontSize: 13, fontWeight: 500, color: C.ink, lineHeight: 1.45 }} />
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', justifyContent: 'flex-end', marginTop: 7 }}>
+            {nFotos > 0 && (
+              <span style={{ marginRight: 'auto', fontSize: 9.5, fontWeight: 700, color: C.sub }}>
+                {nFotos} {nFotos === 1 ? 'foto' : 'fotos'}
+              </span>
+            )}
+            <Button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-2.5 py-1 text-[10.5px] shrink-0">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                <path d="M8 14.5S13 9 13 5.6A5 5 0 0 0 3 5.6C3 9 8 14.5 8 14.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <circle cx="8" cy="5.5" r="1.8" fill="currentColor" />
+              </svg>
+            </Button>
+            <Button onClick={ev => { ev.stopPropagation(); onToggle(); }} title={expanded ? 'Fechar' : (canEdit ? 'Editar este lugar' : 'Ver detalhes')} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-2.5 py-1 text-[10.5px] shrink-0">{expanded ? 'fechar ▴' : (canEdit ? 'editar ▾' : 'detalhes ▾')}</Button>
+          </div>
         </div>
+      </div>
 
-        {!expanded && p.description && (
-          <RichText html={p.description} style={{ marginTop: 8, fontSize: 12.5, fontWeight: 500, color: C.sub, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} />
-        )}
-
+      <div style={{ padding: expanded ? '2px 14px 12px' : 0 }}>
         {expanded && (
           <React.Fragment>
             <div style={{ maxHeight: 340, overflowY: 'auto', marginTop: 10, paddingRight: 2 }}>
@@ -1220,13 +1524,18 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
           </React.Fragment>
         )}
       </div>
+
+      {fotoAberta && (
+        <PhotoLightbox photos={p.photos} openId={fotoAberta} onSetId={setFotoAberta} onClose={() => setFotoAberta(null)} />
+      )}
     </WindowCard>
   );
 }
 
-function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onToggleRanking, onBuildItinerary, canEdit, variant }) {
+function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onToggleRanking, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
+  const [menu, abrirMenu, fecharMenu] = useContextMenu();
   const [expandedId, setExpandedId] = useState(null);
   const [sortBy, setSortBy] = useState('padrao');
   const [sortDir, setSortDir] = useState('asc');
@@ -1307,12 +1616,14 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
       : { position: 'absolute', inset: 0, zIndex: 650, background: C.paper, overflow: 'auto', padding: '62px 20px 120px' }}>
       <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Listas</Button>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
+        onContextMenu={menuDaLista ? abrirMenu(list.id) : undefined}>
         <div style={{ width: 52, height: 52, borderRadius: 16, background: list.color + '22', border: `1px solid ${list.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{list.emoji}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 21, fontWeight: 700, color: C.ink, lineHeight: 1.15 }}>{list.name}</div>
+          <div style={{ fontFamily: 'var(--display-font)', fontSize: 21, fontWeight: 400, color: C.ink, lineHeight: 1.15 }}>{list.name}</div>
           <div style={{ color: C.sub, fontWeight: 500, fontSize: 13 }}>{places.length} {places.length === 1 ? 'lugar' : 'lugares'}</div>
         </div>
+        {canEdit && onAddPlace && <AddButton rotulo="Adicionar novo lugar" onClick={onAddPlace} />}
         {canEdit && (
           <Button onClick={onShare} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px]">
             {list.is_public ? 'Copiar link' : 'Tornar pública e compartilhar'}
@@ -1382,6 +1693,25 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
           </React.Fragment>
         ))}
       </div>
+
+      {canEdit && onAddPlace && (
+        <Button onClick={onAddPlace} variant="outline" size="md" className="mt-3 w-full border-dashed !py-4 !text-[14px]">
+          + Adicionar novo lugar nesta lista
+        </Button>
+      )}
+
+      {canEdit && onDeleteList && (
+        <div style={{ marginTop: 28, paddingTop: 14, borderTop: `1px solid ${C.line}` }}>
+          <Button onClick={onDeleteList} variant="danger" size="sm">Excluir esta lista</Button>
+          <div style={{ marginTop: 4, fontSize: 11.5, fontWeight: 500, color: C.sub, lineHeight: 1.4 }}>
+            Os lugares que só estão nesta lista são apagados junto; os que também estão em outra continuam lá.
+          </div>
+        </div>
+      )}
+
+      {menu && menuDaLista && (
+        <ContextMenu x={menu.x} y={menu.y} itens={menuDaLista(list)} onClose={fecharMenu} />
+      )}
     </div>
   );
 }
@@ -1419,7 +1749,7 @@ function PanelHeader({ titulo, subtitulo, acoes = null, onClose }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 14px 10px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: C.ink }}>{titulo}</div>
+        <div style={{ fontFamily: 'var(--display-font)', fontWeight: 400, fontSize: 15, color: C.ink }}>{titulo}</div>
         {subtitulo && <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginTop: 2 }}>{subtitulo}</div>}
       </div>
       {acoes}
@@ -1804,7 +2134,7 @@ function PlaceHit({ place, lists, onClick }) {
 export {
   Btn,
   SaveSheet,
-  NewListSheet,
+  ListSheet,
   HomeSheet,
   PlaceCard,
   ListsPanel,
