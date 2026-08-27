@@ -6,6 +6,7 @@ export type WindowCardProps = {
   className?: string;
   bodyClassName?: string;
   onClick?: (ev: React.MouseEvent) => void;
+  onContextMenu?: (ev: React.MouseEvent) => void;
   title?: React.ReactNode;
   actions?: React.ReactNode;
   style?: React.CSSProperties;
@@ -16,6 +17,7 @@ export function WindowCard({
   className = '',
   bodyClassName = '',
   onClick,
+  onContextMenu,
   title,
   actions,
   style,
@@ -23,6 +25,7 @@ export function WindowCard({
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       style={style}
       className={cn(
         'bg-surface rounded-lg overflow-hidden border border-line',

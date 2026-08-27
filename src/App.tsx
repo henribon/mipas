@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Dropdown } from '@/components/ui/dropdown';
 import { cn } from '@/lib/utils';
-import { getTheme, setTheme, initialTheme } from '@/theme';
+import { getTheme, setTheme, initialTheme, listColors } from '@/theme';
 import * as data from '@/data';
 import * as mapa from '@/map';
 import { auth, LoginForm } from '@/auth';
@@ -12,7 +12,7 @@ import { errorDetail, isSessionError } from '@/errors';
 import { fetchRoutes, fetchItinerary, MAX_PARADAS, type Modo } from '@/routing';
 import { useLiveLocation } from '@/location';
 import { loadDraft, saveDraft, clearDraft, draftPreenchido } from '@/drafts';
-import { SaveSheet, NewListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit } from '@/components/mipas';
+import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit } from '@/components/mipas';
 
 // Busca sem acento: "acai" tem que achar "Açaí".
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -50,6 +50,7 @@ export default function App() {
   const [newListOpen, setNewListOpen] = useState(false);
   const [creatingList, setCreatingList] = useState(false);
   const [pendingListPick, setPendingListPick] = useState(false);
+  const [editingList, setEditingList] = useState(null);
   const [homeOpen, setHomeOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -529,7 +530,9 @@ export default function App() {
       setTab('map');
       setTimeout(() => {
         leafRef.current.flyTo([created.latitude, created.longitude], 15, { duration: .9 });
-        setSelId(created.id);
+        // No celular a lista aberta cobre o mapa inteiro: o cartão do lugar
+        // apareceria flutuando por cima dela, sem mapa nenhum atrás.
+        if (isDesktop || !openListId) setSelId(created.id);
       }, 100);
     } catch (e) {
       fail('Não deu pra guardar esse lugar', e);
@@ -553,6 +556,88 @@ export default function App() {
     } finally {
       setCreatingList(false);
     }
+  };
+
+  const saveListEdits = async (patch) => {
+    setCreatingList(true);
+    try {
+      const updated = await data.updateList(editingList.id, patch);
+      setLists(ls => ls.map(l => (l.id === updated.id ? updated : l)));
+      setEditingList(null);
+    } catch (e) {
+      fail('Não deu pra salvar a lista', e);
+    } finally {
+      setCreatingList(false);
+    }
+  };
+
+  // A cor vem do menu do botão direito, onde a graça é ver a mudança na hora:
+  // pinta primeiro, e só desfaz se o banco recusar.
+  const setListColor = async (list, color) => {
+    if (color === list.color) return;
+    const antes = list.color;
+    setLists(ls => ls.map(l => (l.id === list.id ? { ...l, color } : l)));
+    try {
+      await data.updateList(list.id, { color });
+    } catch (e) {
+      setLists(ls => ls.map(l => (l.id === list.id ? { ...l, color: antes } : l)));
+      fail('Não deu pra mudar a cor da lista', e);
+    }
+  };
+
+  // Comandos do botão direito numa lista. Montados aqui porque quem sabe fazer
+  // as coisas é o App; o menu lá embaixo só desenha o que receber.
+  const menuDaLista = (l) => [
+    openListId !== l.id && { rotulo: 'Abrir lista', onClick: () => setOpenListId(l.id) },
+    { rotulo: 'Editar lista…', onClick: () => setEditingList(l) },
+    // Listas antigas podem ter cor fora da paleta; sem ela na fila, nenhuma
+    // bolinha apareceria marcada e a cor atual sumiria ao trocar sem querer.
+    { rotulo: 'Mudar a cor', cores: {
+      atual: l.color,
+      opcoes: listColors.includes(l.color) ? listColors : [l.color, ...listColors],
+      onEscolher: (cor) => setListColor(l, cor),
+    } },
+    { rotulo: l.ranking_enabled ? 'Desativar ranking' : 'Ativar ranking', onClick: () => toggleRanking(l) },
+    { rotulo: l.is_public ? 'Copiar link' : 'Tornar pública e copiar link', onClick: () => shareList(l) },
+    { rotulo: 'Adicionar novo lugar…', onClick: () => novoLugarNaLista(l) },
+    { rotulo: 'Excluir lista', perigo: true, separadorAntes: true, onClick: () => removeList(l) },
+  ];
+
+  // Excluir a lista leva junto os lugares que só existiam nela — quem também
+  // está em outra lista continua lá. O aviso diz quantos vão sumir antes de
+  // qualquer coisa acontecer, porque isso aqui não tem desfazer.
+  const removeList = async (list) => {
+    const soNesta = places.filter(p => (p.list_ids || []).length === 1 && p.list_ids[0] === list.id);
+    const nota = soNesta.length === 0 ? ''
+      : soNesta.length === 1
+        ? '\n\n1 lugar que só está nela vai ser apagado junto.'
+        : `\n\n${soNesta.length} lugares que só estão nela vão ser apagados junto.`;
+    if (!confirm(`Excluir a lista "${list.name}"?${nota}`)) return;
+    try {
+      const orfaos = await data.deleteList(list.id);
+      setLists(ls => ls.filter(l => l.id !== list.id));
+      setPlaces(ps => ps
+        .filter(p => !orfaos.includes(p.id))
+        .map(p => ((p.list_ids || []).includes(list.id)
+          ? { ...p, list_ids: p.list_ids.filter(id => id !== list.id) }
+          : p)));
+      setHiddenListIds(ids => ids.filter(id => id !== list.id));
+      setSelId(id => (orfaos.includes(id) ? null : id));
+      setReturnListId(id => (id === list.id ? null : id));
+      setOpenListId(null);
+      setTab('lists');
+    } catch (e) {
+      fail('Não deu pra excluir a lista', e);
+    }
+  };
+
+  // Cadastro que começa dentro da lista: a folha abre já marcada nela e sem
+  // endereço — quem escolhe o endereço (e o pin) é a busca de dentro da folha.
+  const novoLugarNaLista = (list) => {
+    setDraft({
+      address: '', lat: null, lng: null, name: '', category: '', rating: '',
+      description: '', avg_price: '', instagram: '', photos: [], list_ids: [list.id],
+    });
   };
 
   const removePlace = async (id) => {
@@ -883,7 +968,7 @@ export default function App() {
             <div className={cn('overflow-auto', isDesktop ? 'max-h-[min(60vh,420px)] px-3 pb-3' : 'flex-1 px-4 pb-5')}>
               {!query.trim() && (
                 <div className={cn('text-center text-sub', isDesktop ? 'py-6' : 'mt-[90px]')}>
-                  <div className="text-[17px] font-bold text-ink">
+                  <div className="font-display text-[17px] font-normal text-ink">
                     {searchTarget === 'wish' ? 'Um lugar pra ir um dia' : (canEdit ? 'Ache um lugar' : 'Buscar nesta lista')}
                   </div>
                   <div className="mt-1.5 text-[13.5px] font-medium leading-relaxed">
@@ -939,6 +1024,7 @@ export default function App() {
           canEdit={canEdit}
           onOpenList={setOpenListId}
           onNewList={() => setNewListOpen(true)}
+          menuDaLista={canEdit ? menuDaLista : null}
           onBack={() => setTab('map')}
           seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
@@ -976,6 +1062,9 @@ export default function App() {
           onSetCover={setCoverPhoto}
           onToggleRanking={() => toggleRanking(openList)}
           onBuildItinerary={() => montarRoteiroDaLista(openList)}
+          onAddPlace={() => novoLugarNaLista(openList)}
+          onDeleteList={() => removeList(openList)}
+          menuDaLista={canEdit ? menuDaLista : null}
           canEdit={canEdit}
           variant="overlay"
         />
@@ -1080,7 +1169,7 @@ export default function App() {
     </div>
 
     {isDesktop && !sidebarHidden && (
-      <div style={{ width: 380, flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: 'clamp(360px, 38%, 620px)', flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {canEdit && !openList && (
           <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
             <Dropdown
@@ -1117,6 +1206,9 @@ export default function App() {
             onSetCover={setCoverPhoto}
             onToggleRanking={() => toggleRanking(openList)}
             onBuildItinerary={() => montarRoteiroDaLista(openList)}
+            onAddPlace={() => novoLugarNaLista(openList)}
+            onDeleteList={() => removeList(openList)}
+            menuDaLista={canEdit ? menuDaLista : null}
             canEdit={canEdit}
             variant="panel"
           />
@@ -1127,6 +1219,7 @@ export default function App() {
             canEdit={canEdit}
             onOpenList={setOpenListId}
             onNewList={() => setNewListOpen(true)}
+            menuDaLista={canEdit ? menuDaLista : null}
             variant="panel"
           />
         )}
@@ -1156,10 +1249,19 @@ export default function App() {
       )}
 
       {newListOpen && (
-        <NewListSheet
+        <ListSheet
           creating={creatingList}
           onCancel={() => { setNewListOpen(false); setPendingListPick(false); }}
           onCreate={addList}
+        />
+      )}
+
+      {editingList && (
+        <ListSheet
+          list={editingList}
+          creating={creatingList}
+          onCancel={() => setEditingList(null)}
+          onCreate={saveListEdits}
         />
       )}
 

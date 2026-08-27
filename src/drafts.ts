@@ -25,7 +25,11 @@ export function loadDraft(tipo: Tipo) {
     const bruto = localStorage.getItem(CHAVES[tipo]);
     if (!bruto) return null;
     const d = JSON.parse(bruto);
-    if (!d || typeof d !== 'object' || !d.address) return null;
+    if (!d || typeof d !== 'object') return null;
+    // Rascunho de lugar pode ter começado dentro de uma lista, antes de existir
+    // endereço; a folha volta no passo da busca. O de desejo, não: a folha dele
+    // só mostra o endereço, não tem como escolher um.
+    if (!d.address && tipo !== 'place') return null;
     return tipo === 'place' ? { ...d, photos: [] } : d;
   } catch {
     return null;

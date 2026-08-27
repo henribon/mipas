@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* Fonte dos títulos. Licença de USO PESSOAL (Brandsemut) — o Mipas é projeto
+   pessoal do dono, mas uso comercial ou promocional exigiria comprar licença
+   em brandsemut.com/product/milker. O minúsculo dela é desenhado em caixa
+   alta, então todo título sai em maiúsculas mesmo sem text-transform. */
+@font-face {
+  font-family: "Milker";
+  src: url("./assets/fonts/milker.otf") format("opentype");
+  /* Só existe um peso. Declarar a faixa inteira evita que o navegador engrosse
+     o desenho por conta própria quando algum título pedir 700/800. */
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
@@ -158,6 +173,7 @@
   --line: var(--border);
   --busca-brilho: var(--ring);
   --busca-halo: var(--secondary);
+  --display-font: "Milker", "Inter", sans-serif;
 }
 
 :root {
@@ -171,6 +187,7 @@
 }
 
 @theme inline {
+  --font-display: var(--display-font);
   --color-paper: var(--paper);
   --color-surface: var(--surface);
   --color-cream: var(--cream);
@@ -208,6 +225,23 @@ a {
   height: 0;
 }
 
+/* A regra acima esconde a rolagem no app inteiro. Dentro do card do lugar a
+   resenha precisa avisar que tem mais texto embaixo, então ali volta uma barra
+   fininha — que o navegador só desenha quando o texto de fato não coube. */
+.resenha-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.resenha-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.resenha-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
 .leaflet-container {
   font-family: var(--font-sans);
   height: 100%;
@@ -215,12 +249,16 @@ a {
   background: var(--background);
 }
 
+/* Os tiles do OpenStreetMap vêm coloridos (verde de parque, amarelo de via,
+   rosa de rodovia). O grayscale devolve o mapa cinza e quieto que o Mipas
+   tinha com o Positron — os pins ficam em outro pane, então continuam com a
+   cor das listas. */
 .dark .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.95) saturate(0.5);
+  filter: grayscale(1) invert(1) brightness(0.88) contrast(0.92);
 }
 
 .leaflet-tile-pane {
-  filter: saturate(0.65) sepia(0.18) brightness(0.98);
+  filter: grayscale(1) contrast(0.9) brightness(1.05);
 }
 
 .leaflet-control-attribution {
