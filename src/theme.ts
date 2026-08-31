@@ -76,4 +76,9 @@ export function initialTheme(): 'dark' | 'light' {
   }
 }
 
-export const listColors = ['#C25454', '#7B8FC2', '#D9B95C', '#7FB07F', '#C77FA5', '#8ED0C6'];
+// As cores que uma lista (e portanto o pin dela) pode ter. O azul-violeta veio
+// do PANTONE 2725 C, que é tinta e não tem hex exato — #4E5FBB é a conversão
+// pra tela.
+export const listColors = [
+  '#036D9A', '#FDEA6F', '#CF0000', '#4E5FBB', '#B8CE53', '#1A0089', '#FE5E32',
+];
