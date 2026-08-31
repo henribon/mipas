@@ -627,7 +627,9 @@ function ListSheet({ list = null, onCancel, onCreate, creating }) {
           Cole ou digite qualquer emoji do teclado do seu sistema (no Windows: tecla Win + ponto).
         </div>
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Cor</div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+        {/* Sete cores não cabem numa linha só em celular estreito; sem o wrap
+            as bolinhas achatariam e deixariam de ser redondas. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
           {listColors.map(c => (
             <button key={c} onClick={() => setColor(c)} style={{
               width: 32, height: 32, borderRadius: 99, background: c, cursor: 'pointer',

@@ -2,9 +2,9 @@ import L from 'leaflet';
 import { haversineKm } from '@/geocoding';
 
 /**
- * A foto que representa o lugar no mapa: a escolhida a dedo, quando existe, e
- * senão a primeira da galeria — assim todo lugar com foto já nasce com preview
- * no pin, sem ninguém precisar escolher nada.
+ * A foto que representa o lugar: a escolhida a dedo, quando existe, e senão a
+ * primeira da galeria. O pin do mapa não usa foto nenhuma — quem ainda pede a
+ * capa por aqui é o card do lugar e a linha da lista.
  */
 export function coverPhoto(place: any) {
   const fotos = (place?.photos || []).filter((ph: any) => ph.url);
@@ -12,96 +12,33 @@ export function coverPhoto(place: any) {
   return fotos.find((ph: any) => ph.id === place.cover_photo_id) || fotos[0];
 }
 
-// A URL entra dentro de um atributo HTML; aspas soltas ali quebrariam o markup.
-const emAttr = (url: string) => String(url).replace(/'/g, '%27').replace(/"/g, '%22');
-
-// O Leaflet põe z-index 200 em todo <svg> dentro do mapa, então quem vem
-// depois do desenho do pin precisa de z-index maior pra não ser pintado por
-// baixo do círculo — foi o que escondia a foto (e o emoji) dentro do marcador.
-const ACIMA_DO_SVG = 'z-index:201';
-
-export function buildMarkerIcon(list: any, coverUrl?: string | null, animar = true) {
+/**
+ * O pin: a gota na cor da lista, com o furo branco no meio e nada dentro dele.
+ * Sem foto e sem emoji — é a cor que diz de qual lista o lugar é, e a silhueta
+ * limpa continua legível pequena, no zoom em que o mapa mostra a cidade
+ * inteira, coisa que a miniatura de 38px nunca conseguiu.
+ *
+ * A silhueta é calcada no desenho que o dono mandou: cúpula quase redonda em
+ * cima e laterais que descem cheias, afinando só perto da ponta. Repare que
+ * elas são curvas, não retas — reta do ombro até a ponta dá um pin triangular,
+ * magro no meio, que é bem menos parecido com o desenho. As curvas foram
+ * ajustadas contra a largura medida do original em nove alturas.
+ *
+ * O furo é elipse (um pouco mais largo que alto) e fica levemente abaixo do
+ * centro da cúpula, como no desenho.
+ */
+export function buildMarkerIcon(list: any, animar = true) {
   const color = list ? list.color : '#FF5C38';
-  const emoji = list ? list.emoji : '📍';
-  const anim = animar ? 'pin-anim' : '';
-  if (!coverUrl) {
-    return L.divIcon({
-      className: '',
-      iconSize: [36, 46],
-      iconAnchor: [18, 44],
-      html: `<div class="${anim}" style="width:36px;height:46px;position:relative;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))">
-        <svg width="36" height="46" viewBox="0 0 36 46" style="position:absolute;inset:0">
-          <path d="M18 44L12 32H24L18 44Z" fill="${color}"/>
-          <circle cx="18" cy="16" r="15" fill="${color}" stroke="#fff" stroke-width="2.5"/>
-        </svg>
-        <div style="position:absolute;top:2px;left:0;width:36px;text-align:center;font-size:15px;line-height:32px;${ACIMA_DO_SVG}">${emoji}</div>
-      </div>`,
-    });
-  }
-  // Pin com foto é quadrado e maior de propósito: foto é retângulo, e o
-  // recorte redondo comia justamente as bordas que dizem que lugar é aquele.
-  // A cor da lista vira a moldura, e o emoji fica atrás da foto pra reaparecer
-  // sozinho se a imagem sumir.
   return L.divIcon({
     className: '',
-    iconSize: [48, 60],
-    iconAnchor: [24, 58],
-    html: `<div class="pin-foto ${anim}" style="width:48px;height:60px;position:relative;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))">
-        <svg width="48" height="60" viewBox="0 0 48 60" style="position:absolute;inset:0">
-          <path d="M24 58L17 43H31L24 58Z" fill="${color}"/>
-          <rect x="1" y="1" width="46" height="46" rx="12" fill="${color}" stroke="#fff" stroke-width="2"/>
+    iconSize: [32, 50],
+    iconAnchor: [16, 49.5],
+    html: `<div class="${animar ? 'pin-anim' : ''}" style="width:32px;height:50px;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))">
+        <svg width="32" height="50" viewBox="0 0 32 50">
+          <path d="M.5 16.1A15.5 15.6 0 0 1 31.5 16.1C31.5 27.35 19 47.25 16 49.5C13 47.25 .5 27.35 .5 16.1Z" fill="${color}"/>
+          <ellipse cx="16" cy="17" rx="7.3" ry="6.6" fill="#fff"/>
         </svg>
-        <div style="position:absolute;top:5px;left:5px;width:38px;height:38px;text-align:center;font-size:17px;line-height:38px;${ACIMA_DO_SVG}">${emoji}</div>
-        <img src="${emAttr(coverUrl)}" alt="" draggable="false" onerror="this.remove()"
-          style="position:absolute;top:5px;left:5px;width:38px;height:38px;border-radius:8px;object-fit:cover;z-index:202"/>
       </div>`,
-  });
-}
-
-// Miniatura pronta por foto (id da foto -> data URI). A URL assinada troca a
-// cada carregamento da página, mas o id da foto não — é ele que serve de chave.
-const miniaturas = new Map<string, string>();
-// 38px no pin em repouso, mas até ~84px quando o mouse amplia — 200px cobre
-// os dois com folga em tela 2x, e ainda pesa uns 15 KB no lugar dos 12 MP.
-const LADO_MINIATURA = 200;
-
-/**
- * As fotos saem da câmera com 12 MP e o pin exibe 38 pixels delas. Jogar a
- * imagem inteira dentro de um layer minúsculo, arredondado e com drop-shadow é
- * pedir pro navegador rasterizar 12 milhões de pixels pra mostrar mil — e o
- * Chromium às vezes simplesmente desiste, deixando o círculo vazio sem dar
- * erro nenhum. Então o mapa desenha a sua própria miniatura, uma vez por foto,
- * e usa esse recorte quadrado no lugar da foto original.
- */
-function gerarMiniatura(id: string, url: string): Promise<string | null> {
-  const pronta = miniaturas.get(id);
-  if (pronta) return Promise.resolve(pronta);
-  return new Promise(resolve => {
-    const img = new Image();
-    // Sem isto o canvas fica "sujo" e o toDataURL é bloqueado.
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = LADO_MINIATURA;
-        canvas.height = LADO_MINIATURA;
-        const ctx = canvas.getContext('2d');
-        const lado = Math.min(img.naturalWidth, img.naturalHeight);
-        ctx.drawImage(
-          img,
-          (img.naturalWidth - lado) / 2, (img.naturalHeight - lado) / 2, lado, lado,
-          0, 0, LADO_MINIATURA, LADO_MINIATURA,
-        );
-        const mini = canvas.toDataURL('image/jpeg', .82);
-        miniaturas.set(id, mini);
-        resolve(mini);
-      } catch (e) {
-        // Canvas bloqueado por CORS: melhor a foto inteira que pin sem foto.
-        resolve(url);
-      }
-    };
-    img.onerror = () => resolve(null);
-    img.src = url;
   });
 }
 
@@ -324,16 +261,43 @@ export function drawItinerary(
 // marcador só com a contagem; clicar nele aproxima até eles se separarem.
 // ---------------------------------------------------------
 
-/** Distância em pixels abaixo da qual dois pins se atrapalham na tela. */
-const RAIO_AGRUPAMENTO = 46;
+/**
+ * A cabeça do pin: a cúpula de 31px no topo da gota. O bico de baixo não entra
+ * na conta — é fino, aponta pro chão e não é ele que alguém procura na tela.
+ */
+const LADO_DA_CABECA = 31;
+
+/**
+ * Quanto um pin pode esconder do outro antes de valer mais a pena mostrar uma
+ * bolha com a contagem. Encostar não atrapalha: dois pins com um pedaço
+ * coberto continuam legíveis, clicáveis e — diferente da bolha — dizem onde
+ * cada lugar fica. Só passa a atrapalhar quando um engole mais da metade do
+ * outro.
+ */
+const COBERTURA_MAXIMA = .5;
+
+/**
+ * Fração de um pin que o outro cobre na tela: a área comum entre as duas
+ * cabeças. O critério já foi a distância entre os centros, com um raio maior
+ * que o próprio pin — dois pins que mal se tocavam viravam bolha, e era isso
+ * que empilhava lugares a 400m de distância num zoom onde dá pra ler o nome
+ * das ruas.
+ */
+function cobertura(a: L.Point, b: L.Point) {
+  const largura = Math.max(0, LADO_DA_CABECA - Math.abs(a.x - b.x));
+  const altura = Math.max(0, LADO_DA_CABECA - Math.abs(a.y - b.y));
+  return (largura * altura) / (LADO_DA_CABECA * LADO_DA_CABECA);
+}
+
+const seEmpilham = (a: L.Point, b: L.Point) => cobertura(a, b) > COBERTURA_MAXIMA;
 
 type Grupo = { places: any[]; lat: number; lng: number };
 
 /**
- * Agrupa por distância na tela, não por coordenada: o que importa é se os pins
- * se encostam no zoom atual. Guloso e O(n²) — com dezenas de lugares isso é
- * instantâneo, e evita a costura torta que uma grade fixa deixaria quando dois
- * pontos vizinhos caem em células diferentes.
+ * Agrupa pelo que se vê na tela, não por coordenada: o que importa é o quanto
+ * os pins se cobrem no zoom atual. Guloso e O(n²) — com dezenas de lugares
+ * isso é instantâneo, e evita a costura torta que uma grade fixa deixaria
+ * quando dois pontos vizinhos caem em células diferentes.
  */
 function agrupar(map: L.Map, places: any[]): Grupo[] {
   const pontos = places.map(p => ({ p, xy: map.latLngToLayerPoint([p.latitude, p.longitude]) }));
@@ -345,7 +309,7 @@ function agrupar(map: L.Map, places: any[]): Grupo[] {
     const juntos = [a.p];
     pontos.forEach((b, j) => {
       if (usados[j] || j === i) return;
-      if (a.xy.distanceTo(b.xy) > RAIO_AGRUPAMENTO) return;
+      if (!seEmpilham(a.xy, b.xy)) return;
       usados[j] = true;
       juntos.push(b.p);
     });
@@ -362,9 +326,13 @@ const comCentro = (places: any[]): Grupo => ({
 
 /**
  * O centro de um grupo não fica onde estava a semente dele, então dois grupos
- * recém-formados podem terminar mais perto um do outro do que o raio permite —
- * exatamente a sobreposição que o agrupamento existe pra evitar. Esta passada
- * funde os que ficaram colados, até ninguém mais se encostar.
+ * recém-formados podem terminar cobrindo um ao outro — exatamente a pilha que
+ * o agrupamento existe pra evitar. Esta passada funde os que ficaram por cima
+ * um do outro, até ninguém mais se cobrir.
+ *
+ * O centro andar a cada fusão já foi motivo de grupo crescer em cadeia muito
+ * além do que a bolha representa; com a cobertura no lugar do raio isso parou
+ * de acontecer, porque o critério só alcança quem está de fato empilhado.
  */
 function fundirProximos(map: L.Map, grupos: Grupo[]): Grupo[] {
   const atuais = [...grupos];
@@ -373,7 +341,7 @@ function fundirProximos(map: L.Map, grupos: Grupo[]): Grupo[] {
     let fundiu = false;
     for (let i = 0; i < atuais.length && !fundiu; i++) {
       for (let j = i + 1; j < atuais.length; j++) {
-        if (pontos[i].distanceTo(pontos[j]) > RAIO_AGRUPAMENTO) continue;
+        if (!seEmpilham(pontos[i], pontos[j])) continue;
         atuais[i] = comCentro([...atuais[i].places, ...atuais[j].places]);
         atuais.splice(j, 1);
         fundiu = true;
@@ -449,19 +417,10 @@ function desenharMarcadores(estado: EstadoMarcadores, animar: boolean) {
       return;
     }
 
-    const capa = coverPhoto(primeiro);
-    const mini = capa ? miniaturas.get(capa.id) : null;
     const marker = L.marker([primeiro.latitude, primeiro.longitude], {
-      icon: buildMarkerIcon(list, mini, animar),
+      icon: buildMarkerIcon(list, animar),
     }).addTo(map);
     marker.on('click', () => onMarkerClick(primeiro));
     markersRef.current[primeiro.id] = marker;
-    // Sem miniatura pronta o pin nasce com o emoji e ganha a foto quando ela
-    // fica pronta — nunca fica esperando download pra aparecer no mapa.
-    if (capa && !mini) {
-      gerarMiniatura(capa.id, capa.url).then(nova => {
-        if (nova && markersRef.current[primeiro.id] === marker) marker.setIcon(buildMarkerIcon(list, nova, false));
-      });
-    }
   });
 }

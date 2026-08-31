@@ -323,32 +323,6 @@ select:focus {
   animation: pinDrop 0.4s ease-out;
 }
 
-/* Passar o mouse num pin com foto amplia a miniatura, pra dar pra ver o lugar
-   sem abrir o card. Só onde existe mouse de verdade: no toque não há hover, e
-   o pin ficaria ampliado depois do tap, preso até tocar em outro lugar. */
-@media (hover: hover) and (pointer: fine) {
-  .pin-foto {
-    transition: transform 0.16s ease-out;
-    /* Ancorado na ponta: cresce pra cima, continua marcando o mesmo ponto do
-       mapa e nunca escapa de baixo do cursor (que causaria pisca-pisca). */
-    transform-origin: 50% 100%;
-  }
-
-  .pin-foto:hover {
-    transform: scale(2.4);
-    /* Só amplia quando a intenção é olhar: passar de raspão a caminho de outro
-       lugar do mapa não dispara nada. O atraso vive só aqui, no estado de
-       hover — ao sair, a regra de cima (sem atraso) devolve o pin na hora. */
-    transition-delay: 0.35s;
-  }
-
-  /* O z-index do marcador é inline (o Leaflet ordena os pins por latitude),
-     então só com !important o pin ampliado passa na frente dos vizinhos. */
-  .leaflet-marker-icon:has(.pin-foto:hover) {
-    z-index: 10000 !important;
-  }
-}
-
 @media (min-width: 720px) {
   .mipas-sheet {
     left: 50% !important;
