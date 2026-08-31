@@ -728,3 +728,26 @@ $$;
 grant select (cover_photo_id) on public.places to anon;
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- Ocultar uma lista do mapa
+--
+-- Duas escolhas independentes e guardadas no banco: o dono pode tirar a lista
+-- do proprio mapa (hidden_for_owner) e pode tira-la do mapa de quem chega ao
+-- site sem link (hidden_for_visitor).
+--
+-- Nao e sigilo: a lista publica continua legivel por link direto, e quem tem o
+-- link continua vendo os pins. E so sumir com eles do mapa geral, pra tirar
+-- ruido de quem visita. Pra esconder de verdade, a lista tem que deixar de ser
+-- publica (is_public = false), que ai a policy de leitura ja barra.
+-- ---------------------------------------------------------
+
+alter table public.lists add column if not exists hidden_for_owner boolean not null default false;
+alter table public.lists add column if not exists hidden_for_visitor boolean not null default false;
+
+-- O anon le a lista por coluna (nao ha grant amplo nesta tabela); sem isto o
+-- visitante nao teria como saber que a lista deve sair do mapa dele.
+grant select (hidden_for_visitor) on public.lists to anon;
+
+notify pgrst, 'reload schema';

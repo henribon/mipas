@@ -980,6 +980,18 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
                 <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
+                {/* Lista fora do mapa nao tem nada que a denuncie no card; sem
+                    este aviso, some do mapa e vira mistério semanas depois. */}
+                {canEdit && (l.hidden_for_owner || l.hidden_for_visitor) && (
+                  <div style={{ marginTop: 3, fontSize: 11, fontWeight: 600, color: C.sub, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <path d="M2 8s2.4-4 6-4 6 4 6 4-2.4 4-6 4-6-4-6-4Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                      <path d="M3 3l10 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                    {[l.hidden_for_owner && 'fora do seu mapa', l.hidden_for_visitor && 'fora do mapa dos visitantes']
+                      .filter(Boolean).join(' · ')}
+                  </div>
+                )}
               </div>
               <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
             </WindowCard>

@@ -4,7 +4,7 @@ import { config } from '@/theme';
 const client = createClient(config.supabaseUrl, config.supabaseAnonKey);
 export { client as supabase };
 
-const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, ranking_enabled, created_at';
+const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, ranking_enabled, hidden_for_visitor, created_at';
 const PHOTO_PUBLIC_COLS = 'id, place_id, storage_path, title, description, position, created_at';
 // Desde que places.cover_photo_id existe, há dois caminhos entre places e
 // place_photos (a foto aponta pro lugar, o lugar aponta pra foto de capa) e o

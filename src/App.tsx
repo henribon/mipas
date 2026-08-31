@@ -239,6 +239,15 @@ export default function App() {
       .then(([ls, ps]) => {
         setLists(ls);
         setPlaces(ps);
+        // Lista marcada como oculta comeca fora do mapa. E so o ponto de
+        // partida: o painel de Camadas continua podendo revelar na sessao.
+        // Link direto e excecao — quem abriu a lista pelo link quer ve-la.
+        if (!sharedMode) {
+          const campo = canEdit ? 'hidden_for_owner' : 'hidden_for_visitor';
+          // O cast existe só pro TypeScript: o parser de tipos do supabase-js
+          // desiste de inferir a linha do select depois que ela ficou longa.
+          setHiddenListIds((ls as any[]).filter(l => l[campo]).map(l => l.id));
+        }
         setLoadError(sharedMode && ls.length === 0 ? 'Essa lista não está disponível.' : '');
       })
       .catch(e => {
@@ -585,6 +594,26 @@ export default function App() {
     }
   };
 
+  // As duas visibilidades sao independentes: uma vale pro mapa do dono, a outra
+  // pro mapa de quem visita o site. Pinta primeiro e desfaz se o banco recusar.
+  const toggleListHidden = async (list, campo) => {
+    const valor = !list[campo];
+    const antes = lists;
+    setLists(ls => ls.map(l => (l.id === list.id ? { ...l, [campo]: valor } : l)));
+    // Só mexe no mapa que estou vendo agora se for o campo do meu ponto de vista.
+    if (campo === (canEdit ? 'hidden_for_owner' : 'hidden_for_visitor')) {
+      setHiddenListIds(ids => (valor
+        ? (ids.includes(list.id) ? ids : [...ids, list.id])
+        : ids.filter(id => id !== list.id)));
+    }
+    try {
+      await data.updateList(list.id, { [campo]: valor });
+    } catch (e) {
+      setLists(antes);
+      fail('Não deu pra mudar a visibilidade da lista', e);
+    }
+  };
+
   // Comandos do botão direito numa lista. Montados aqui porque quem sabe fazer
   // as coisas é o App; o menu lá embaixo só desenha o que receber.
   const menuDaLista = (l) => [
@@ -597,7 +626,11 @@ export default function App() {
       opcoes: listColors.includes(l.color) ? listColors : [l.color, ...listColors],
       onEscolher: (cor) => setListColor(l, cor),
     } },
-    { rotulo: l.ranking_enabled ? 'Desativar ranking' : 'Ativar ranking', onClick: () => toggleRanking(l) },
+    { rotulo: l.hidden_for_owner ? 'Mostrar no meu mapa' : 'Ocultar do meu mapa',
+      separadorAntes: true, onClick: () => toggleListHidden(l, 'hidden_for_owner') },
+    { rotulo: l.hidden_for_visitor ? 'Mostrar no mapa dos visitantes' : 'Ocultar do mapa dos visitantes',
+      onClick: () => toggleListHidden(l, 'hidden_for_visitor') },
+    { rotulo: l.ranking_enabled ? 'Desativar ranking' : 'Ativar ranking', separadorAntes: true, onClick: () => toggleRanking(l) },
     { rotulo: l.is_public ? 'Copiar link' : 'Tornar pública e copiar link', onClick: () => shareList(l) },
     { rotulo: 'Adicionar novo lugar…', onClick: () => novoLugarNaLista(l) },
     { rotulo: 'Excluir lista', perigo: true, separadorAntes: true, onClick: () => removeList(l) },
