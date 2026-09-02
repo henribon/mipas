@@ -182,9 +182,6 @@ function Btn({ children, onClick, primary, style, disabled, icon, tooltip, class
   );
 }
 
-// Arrastar foto de fora do navegador pra dentro de uma área de fotos. O
-// contador de enter/leave existe porque passar o cursor por cima de um filho
-// dispara dragleave no pai — sem ele o destaque piscaria sem parar.
 const temArquivo = (ev) => Array.from(ev.dataTransfer?.types || []).includes('Files');
 const imagensSoltas = (ev): File[] => (ev.dataTransfer ? Array.from<File>(ev.dataTransfer.files) : [])
   .filter(f => f.type.startsWith('image/'));
@@ -193,8 +190,6 @@ function useFileDrop(onFiles, ativo = true): [boolean, any] {
   const [sobre, setSobre] = useState(false);
   const profundidade = useRef(0);
 
-  // Soltar a foto fora da área faria o navegador abrir o arquivo e jogar fora o
-  // que estava preenchido — melhor engolir o drop na página inteira.
   useEffect(() => {
     const impedir = (ev) => { if (temArquivo(ev)) ev.preventDefault(); };
     window.addEventListener('dragover', impedir);
@@ -307,8 +302,6 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inli
           border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 12px', fontSize: 13, fontWeight: 600, color: C.ink,
         }} />
       )}
-      {/* Com "inline" a lista cresce inteira e quem rola é o bloco de fora —
-          sem isso a folha vira uma caixa de rolagem dentro de outra. */}
       <div style={{
         ...(inline ? null : { maxHeight: compacto ? 132 : 176, overflowY: 'auto' }),
         border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface,
@@ -337,10 +330,6 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inli
   );
 }
 
-/**
- * Busca de endereço dentro da própria folha. Quem cadastra um lugar novo a
- * partir da lista não passa pela busca do mapa — é aqui que o pin nasce.
- */
 function AddressPicker({ onPick, autoFocus }) {
   const C = getTheme();
   const [query, setQuery] = useState('');
@@ -383,21 +372,12 @@ function AddressPicker({ onPick, autoFocus }) {
   );
 }
 
-/**
- * Menu de botão direito. Vive num portal pra não ser recortado pelo card que o
- * abriu, nasce no cursor e vira pra dentro quando não cabe até a borda.
- *
- * Cada item é `{ rotulo, onClick }`; `perigo` pinta de vermelho, `separadorAntes`
- * abre um traço acima, e `cores` troca o item por um submenu de bolinhas.
- */
 function ContextMenu({ x, y, itens, onClose }) {
   const C = getTheme();
   const ref = useRef(null);
   const [pos, setPos] = useState({ left: x, top: y, pronto: false });
   const [submenu, setSubmenu] = useState(null);
 
-  // Medir antes de pintar: sem isto o menu aberto perto da borda aparece meio
-  // fora da tela e só então pula pro lugar certo.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -412,8 +392,6 @@ function ContextMenu({ x, y, itens, onClose }) {
   useEffect(() => {
     const fechar = () => onClose();
     const naTecla = (ev) => { if (ev.key === 'Escape') onClose(); };
-    // O gesto que abriu o menu ainda está subindo pelo DOM; esperar um tique
-    // evita que ele mesmo feche o menu que acabou de nascer.
     const tique = setTimeout(() => {
       window.addEventListener('pointerdown', fechar);
       window.addEventListener('contextmenu', fechar);
@@ -439,7 +417,6 @@ function ContextMenu({ x, y, itens, onClose }) {
   } as React.CSSProperties;
   const realce = (ev, ligado) => { ev.currentTarget.style.background = ligado ? C.cream : 'transparent'; };
 
-  // Perto da borda direita o submenu abriria pra fora da tela.
   const paraEsquerda = pos.left > window.innerWidth - 400;
 
   return ReactDOM.createPortal(
@@ -501,11 +478,6 @@ function ContextMenu({ x, y, itens, onClose }) {
   );
 }
 
-/**
- * Liga o botão direito num alvo identificado por id. Guardar o id (e não o
- * objeto) faz o menu se redesenhar sozinho quando o alvo muda — trocar a cor
- * marca a bolinha nova sem fechar o menu.
- */
 function useContextMenu() {
   const [menu, setMenu] = useState(null);
   const abrir = (id) => (ev) => {
@@ -521,8 +493,6 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const listIds = draft.list_ids || [];
   const alternaLista = (id) => set('list_ids', listIds.includes(id) ? listIds.filter(x => x !== id) : [...listIds, id]);
-  // Cadastro que começa pela lista chega aqui sem endereço nenhum: ele é
-  // escolhido dentro da folha, e sem coordenada não existe pin pra guardar.
   const temEndereco = draft.lat != null && draft.lng != null;
   const canSave = draft.name.trim() && listIds.length > 0 && temEndereco && !saving;
   const trocarEndereco = () => setDraft(d => ({ ...d, address: '', lat: null, lng: null }));
@@ -585,8 +555,6 @@ function SaveSheet({ draft, setDraft, lists, onNewList, onCancel, onSave, saving
   );
 }
 
-/** Mesma folha pra criar e pra editar: muda o título, o botão e de onde vêm os
- *  valores iniciais. Sem ela não havia como renomear uma lista nem trocar o emoji. */
 function ListSheet({ list = null, onCancel, onCreate, creating }) {
   const C = getTheme();
   const editando = !!list;
@@ -611,8 +579,6 @@ function ListSheet({ list = null, onCancel, onCreate, creating }) {
           Cole ou digite qualquer emoji do teclado do seu sistema (no Windows: tecla Win + ponto).
         </div>
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Cor</div>
-        {/* Sete cores não cabem numa linha só em celular estreito; sem o wrap
-            as bolinhas achatariam e deixariam de ser redondas. */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
           {listColors.map(c => (
             <button key={c} onClick={() => setColor(c)} style={{
@@ -733,8 +699,6 @@ function AddressLink({ place, fontSize }) {
 function InstagramButton({ handle, compacto = false }) {
   const C = getTheme();
   const url = /^https?:\/\//i.test(handle) ? handle : 'https://instagram.com/' + handle.replace(/^@/, '');
-  // Na linha "endereço / instagram" do item da lista a pílula colorida gritaria
-  // mais que o nome do lugar; ali entra só o arroba, no tom do endereço.
   if (compacto) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
@@ -873,28 +837,21 @@ function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
   );
 }
 
-// O Mipas é um cômodo do bonbap, não a casa inteira: tem que dar pra sair
-// daqui e voltar pra home. Link de verdade (<a>) e não botão — abrir em outra
-// aba, copiar o endereço e o clique do meio são coisas que quem navega espera
-// de uma saída dessas.
 export function HomeButton({ className = '' }) {
+  const C = getTheme();
   return (
-    <a href="https://bonbap.com.br" title="Voltar para o bonbap.com.br"
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-3xl border border-line bg-surface',
-        'px-3.5 py-2 text-[12.5px] font-semibold text-coral no-underline shadow-sm transition hover:bg-cream',
-        className,
-      )}>
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-        <path d="M9.6 3.2 4.8 8l4.8 4.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <a href="https://bonbap.com.br" title="Ir para o bonbap.com.br"
+      className={cn('inline-flex shrink-0 items-center gap-1.5 no-underline transition hover:opacity-65', className)}>
+      <span style={{ fontFamily: 'var(--display-font)', fontWeight: 400, fontSize: 16, lineHeight: 1, letterSpacing: .5, color: C.sub }}>
+        bonbap
+      </span>
+      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{ marginTop: -2 }}>
+        <path d="M3.4 8.6 8.6 3.4M4.4 3.4h4.2v4.2" stroke={C.sub} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      bonbap
     </a>
   );
 }
 
-// No celular a tela inicial passou a ser a lista, então o mapa virou destino
-// e não ponto de partida — daí a entrada pro mapa morar aqui em cima.
 function OverlayTopRow({ onViewMap }) {
   return (
     <div className="mb-3.5 flex items-center gap-2">
@@ -979,7 +936,6 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, 
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [menu, abrirMenu, fecharMenu] = useContextMenu();
-  // Pelo id, não pelo objeto: assim trocar a cor redesenha o menu já aberto.
   const listaDoMenu = menu ? lists.find(l => l.id === menu.id) : null;
   return (
     <div style={isPanel
@@ -1002,8 +958,6 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, 
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
                 <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
-                {/* Lista fora do mapa nao tem nada que a denuncie no card; sem
-                    este aviso, some do mapa e vira mistério semanas depois. */}
                 {canEdit && (l.hidden_for_owner || l.hidden_for_visitor) && (
                   <div style={{ marginTop: 3, fontSize: 11, fontWeight: 600, color: C.sub, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
@@ -1021,8 +975,6 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, 
         })}
       </div>
 
-      {/* menuDaLista some quando a sessão cai: sem esta guarda, um menu aberto
-          na hora do logout derrubaria o painel inteiro. */}
       {listaDoMenu && menuDaLista && (
         <ContextMenu x={menu.x} y={menu.y} itens={menuDaLista(listaDoMenu)} onClose={fecharMenu} />
       )}
@@ -1062,8 +1014,6 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
     return campo in e ? e[campo] : (ph[campo] ?? '');
   };
 
-  // Escolher a capa é coisa de dono: quem só está visitando a lista vê as
-  // fotos sem marca nenhuma.
   const podeEscolherCapa = canEdit && !!onSetCover;
   const ehCapa = (ph) => podeEscolherCapa && ph.id === coverId;
 
@@ -1278,11 +1228,6 @@ const NUMERIC_SORT_ACCESSORS = {
   valor: p => p.avg_price,
 };
 
-/**
- * Foto de capa do lugar preenchendo a coluna da esquerda do item. Sem foto
- * fica o emoji da lista no mesmo espaço, senão a coluna de textos ao lado
- * mudaria de altura de item pra item.
- */
 function PlaceThumb({ place, list, onClick }) {
   const C = getTheme();
   const capa = coverPhoto(place);
@@ -1401,8 +1346,6 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
     <div key={texto} style={{ fontSize: 12, fontWeight: 700, color: cor || C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '4px 10px' }}>{texto}</div>
   );
 
-  // Embaixo da foto quem tem que saltar aos olhos é a nota; categoria, valor e
-  // distância são etiqueta de canto de olho, não informação de primeira leitura.
   const tagMini = (texto, cor = null) => (
     <span key={texto} style={{
       fontSize: 9.5, fontWeight: 700, lineHeight: 1.5, letterSpacing: .2, whiteSpace: 'nowrap',
@@ -1423,7 +1366,6 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
     onOpenMap(p);
   };
 
-  // Clicar na foto do item abre a galeria em cima dela, sem abrir a edição.
   const [fotoAberta, setFotoAberta] = useState(null);
   const capa = coverPhoto(p);
   const abrirFotos = capa
@@ -1440,9 +1382,6 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
     <WindowCard>
       <div onClick={expanded ? undefined : clique} onDoubleClick={expanded ? undefined : duploClique}
         title={expanded ? undefined : 'Clique para abrir, duplo clique para ver no mapa'}
-        // Altura fixa de propósito: é ela que dá o limite pra resenha rolar dentro
-        // do card (com altura livre o texto só esticaria o cartão) e faz a lista
-        // inteira ficar no mesmo ritmo, resenha curta ou longa.
         style={{ display: 'flex', alignItems: 'stretch', height: 208, cursor: expanded ? 'default' : 'pointer' }}>
 
         <div style={{ width: '40%', maxWidth: 200, minWidth: 112, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: `1px solid ${C.line}` }}>
@@ -1450,9 +1389,6 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', padding: '7px 9px', borderTop: `1px solid ${C.line}` }}>
             {p.rating != null && (
               <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 3, color: C.coral, lineHeight: 1, marginRight: 2 }}>
-                {/* A estrela não existe na fonte de título e cairia numa de
-                    sistema, fininha ao lado dos numerais pesados: menor, ela
-                    vira acento do número em vez de competir com ele. */}
                 <span style={{ fontSize: 11 }}>★</span>
                 <span style={{ fontFamily: 'var(--display-font)', fontSize: 16, fontWeight: 400 }}>{p.rating}</span>
               </div>
@@ -1480,8 +1416,6 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
             )}
           </div>
 
-          {/* A resenha rola dentro do próprio card: dá pra ler inteira sem abrir
-              o lugar, e o cartão não estica conforme o tamanho do texto. */}
           <div className="resenha-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 8, paddingRight: 4 }}>
             {!expanded && p.description && (
               <RichText html={p.description} style={{ fontSize: 13, fontWeight: 500, color: C.ink, lineHeight: 1.45 }} />
@@ -1723,11 +1657,6 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
 }
 
 
-/**
- * Cartão que flutua sobre o mapa sem tapá-lo: no desktop encosta na lateral, no
- * celular vira uma faixa presa ao topo (camadas, logo abaixo do botão) ou ao pé
- * da tela (roteiro, onde o polegar alcança).
- */
 function FloatingPanel({ anchor, isDesktop, children }) {
   const C = getTheme();
   const posicao = anchor === 'bottom'
@@ -1784,11 +1713,6 @@ const RECADO_GPS = {
   indisponivel: 'este navegador não tem geolocalização',
 };
 
-/**
- * De onde o Mipas mede tudo: distância nas listas, o caminho até um lugar e o
- * começo do roteiro. A posição ao vivo é a padrão; a casa fica de alternativa
- * pra quem quer planejar de longe.
- */
 function OriginPanel({
   origem, onOrigem, gpsEstado, gpsPos, onLigarGps, onDesligarGps,
   home, canEdit, onDefinirCasa, onCentralizar, onClose, isDesktop,
@@ -1977,8 +1901,6 @@ function ItineraryPanel({
     .filter(p => !stopIds.includes(p.id))
     .filter(p => !termo || `${p.name} ${p.category || ''}`.toLowerCase().includes(termo));
 
-  // O tempo mostrado antes de cada parada é o do trecho que chega nela; a
-  // primeira do trajeto não tem trecho anterior.
   const trechoAte = (posicao) => (itinerary && posicao > 0 ? itinerary.legs[posicao - 1] : null);
 
   const linhaPonto = (posicao, icone, titulo, subtitulo, acoes) => {

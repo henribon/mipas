@@ -7,8 +7,6 @@ type ApiError = {
   error_description?: string;
 };
 
-// PGRST301/302: o PostgREST recebeu um JWT vencido ou inválido.
-// 42501: o Postgres tratou a requisição como anônima e negou a permissão.
 const SESSION_CODES = ['PGRST301', 'PGRST302', '42501'];
 
 export function isSessionError(e: unknown): boolean {

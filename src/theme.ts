@@ -46,13 +46,8 @@ export function getTheme(): Theme {
   return atual;
 }
 
-// Chave nova de propósito. A antiga ('mipas-theme') era regravada a cada
-// carregamento com o tema que estava sendo aplicado, então ela guardava o
-// padrão de então — claro — e não uma escolha de verdade de ninguém. Herdar
-// aquele valor deixaria todo mundo preso no claro pra sempre.
 const CHAVE_TEMA = 'mipas-tema';
 
-/** `persistir` só quando a pessoa realmente escolheu, nunca no boot. */
 export function setTheme(mode: 'dark' | 'light', persistir = true) {
   document.documentElement.classList.toggle('dark', mode === 'dark');
   document.body.classList.toggle('dark', mode === 'dark');
@@ -61,12 +56,9 @@ export function setTheme(mode: 'dark' | 'light', persistir = true) {
   try {
     localStorage.setItem(CHAVE_TEMA, mode);
   } catch (e) {
-    /* modo privado */
   }
 }
 
-// Escuro é o padrão do Mipas: quem nunca tocou no botão de tema entra no
-// escuro, e quem já escolheu continua com a escolha guardada.
 export function initialTheme(): 'dark' | 'light' {
   try {
     localStorage.removeItem('mipas-theme');
@@ -76,9 +68,6 @@ export function initialTheme(): 'dark' | 'light' {
   }
 }
 
-// As cores que uma lista (e portanto o pin dela) pode ter. O azul-violeta veio
-// do PANTONE 2725 C, que é tinta e não tem hex exato — #4E5FBB é a conversão
-// pra tela.
 export const listColors = [
   '#036D9A', '#FDEA6F', '#CF0000', '#4E5FBB', '#B8CE53', '#1A0089', '#FE5E32',
 ];

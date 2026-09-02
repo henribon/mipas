@@ -6,10 +6,6 @@ export { client as supabase };
 
 const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, hidden_for_visitor, created_at';
 const PHOTO_PUBLIC_COLS = 'id, place_id, storage_path, title, description, position, created_at';
-// Desde que places.cover_photo_id existe, há dois caminhos entre places e
-// place_photos (a foto aponta pro lugar, o lugar aponta pra foto de capa) e o
-// PostgREST recusa o embed sem saber qual usar. Aqui sempre queremos o de
-// sempre: todas as fotos daquele lugar.
 const FOTOS_DO_LUGAR = 'place_photos!place_photos_place_id_fkey';
 const PLACE_PUBLIC_COLS = 'id, name, address, latitude, longitude, category, '
   + 'rating, description, avg_price, instagram, cover_photo_id, created_at, '

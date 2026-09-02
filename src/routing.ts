@@ -6,17 +6,12 @@ export type RouteLeg = {
   km: number;
   minutes: number;
   coords: Ponto[];
-  /** true = não é rota real, é a linha reta com uma estimativa em cima. */
   estimated: boolean;
 };
 
 export type Routes = { from: Ponto; to: Ponto; walking: RouteLeg; driving: RouteLeg };
 
-// Valhalla público mantido pela FOSSGIS pra OpenStreetMap: sem chave, mesma
-// pegada do Nominatim que a busca de endereço já usa. É serviço de cortesia,
-// então uma requisição por clique, com cache e prazo curto pra desistir.
 const VALHALLA = 'https://valhalla1.openstreetmap.de/route';
-// Mesmo serviço, mas reordenando as paradas do meio pra encurtar o caminho.
 const VALHALLA_OTIMIZADO = 'https://valhalla1.openstreetmap.de/optimized_route';
 const TIMEOUT_MS = 12000;
 
@@ -24,11 +19,8 @@ const COSTING = { walking: 'pedestrian', driving: 'auto' };
 
 export type Modo = keyof typeof COSTING;
 
-/** Teto de paradas por roteiro — o serviço é de cortesia, não dá pra abusar. */
 export const MAX_PARADAS = 10;
 
-// Usados só quando o roteador não responde: a linha reta encurta o caminho,
-// daí o fator de desvio antes de dividir pela velocidade média.
 const DETOUR = 1.3;
 const KMH = { walking: 4.8, driving: 28 };
 
@@ -37,7 +29,6 @@ const cache = new Map<string, RouteLeg>();
 const chave = (modo: string, from: Ponto, to: Ponto) =>
   `${modo}:${from.map(n => n.toFixed(5)).join()}>${to.map(n => n.toFixed(5)).join()}`;
 
-/** Polyline do Valhalla: mesmo algoritmo do Google, mas com 6 casas decimais. */
 export function decodePolyline(str: string, precision = 6): Ponto[] {
   const fator = Math.pow(10, precision);
   const out: Ponto[] = [];
@@ -105,11 +96,6 @@ async function fetchLeg(modo: keyof typeof COSTING, from: Ponto, to: Ponto): Pro
   }
 }
 
-/**
- * A pé e de carro entre dois pontos. Nunca rejeita: se o roteador falhar ou
- * demorar, o trecho vira linha reta com tempo estimado — o botão continua
- * respondendo, só que dizendo que é aproximação.
- */
 export async function fetchRoutes(from: Ponto, to: Ponto): Promise<Routes> {
   const [walking, driving] = await Promise.all(
     (['walking', 'driving'] as const).map(modo =>
@@ -123,11 +109,8 @@ export async function fetchRoutes(from: Ponto, to: Ponto): Promise<Routes> {
 
 export type Itinerary = {
   mode: Modo;
-  /** Paradas já na ordem final do trajeto. */
   points: Ponto[];
-  /** Pra cada posição final, o índice que o ponto tinha na entrada. */
   order: number[];
-  /** Um trecho por par de paradas consecutivas: legs.length === points.length - 1. */
   legs: RouteLeg[];
   km: number;
   minutes: number;
@@ -174,11 +157,6 @@ function legsDoTrip(trip: any): RouteLeg[] {
   });
 }
 
-/**
- * A ordem que o otimizador escolheu. Cada item de trip.locations traz o índice
- * que aquele ponto tinha no pedido; se vier faltando ou repetido, é mais seguro
- * ignorar e manter a ordem original do que desenhar um trajeto embaralhado.
- */
 function ordemDoTrip(trip: any, total: number): number[] | null {
   const locais = trip.locations;
   if (!Array.isArray(locais) || locais.length !== total) return null;
@@ -188,11 +166,6 @@ function ordemDoTrip(trip: any, total: number): number[] | null {
   return valida ? ordem : null;
 }
 
-/**
- * Trajeto passando por todas as paradas, na ordem dada ou na ordem mais curta
- * que o roteador encontrar. Nunca rejeita: se o serviço não responder, cada
- * trecho vira linha reta com tempo estimado, igual ao caminho de um destino só.
- */
 export async function fetchItinerary(pontos: Ponto[], modo: Modo, otimizar: boolean): Promise<Itinerary> {
   const chave = chaveRoteiro(modo, pontos, otimizar);
   const emCache = cacheRoteiro.get(chave);
