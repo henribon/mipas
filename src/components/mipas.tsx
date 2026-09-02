@@ -11,22 +11,6 @@ import VerticalthumbsSlider from '@/components/ui/vertical-thumbnail-slider';
 import { WindowCard } from '@/components/ui/window-card';
 import { cn } from '@/lib/utils';
 
-export const computeRanks = function (places) {
-  const comNota = (places || []).filter(p => p.rating != null)
-    .sort((a, b) => (b.rating - a.rating) || String(a.name).localeCompare(String(b.name), 'pt-BR'));
-  const ranks = {};
-  let posicao = 0;
-  let notaAnterior = null;
-  comNota.forEach((p, i) => {
-    if (notaAnterior === null || Number(p.rating) !== Number(notaAnterior)) {
-      posicao = i + 1;
-      notaAnterior = p.rating;
-    }
-    ranks[p.id] = posicao;
-  });
-  return ranks;
-};
-
 function gradientForPlace(place, list) {
   const color = list ? list.color : '#FF5C38';
   return `linear-gradient(135deg, ${color}33, ${color}0D)`;
@@ -889,7 +873,50 @@ function WishSheet({ draft, setDraft, saving, onCancel, onSave }) {
   );
 }
 
-function WishPanel({ wishes, origem, onNew, onFui, onRemove, onBack, seletor, variant }) {
+// O Mipas é um cômodo do bonbap, não a casa inteira: tem que dar pra sair
+// daqui e voltar pra home. Link de verdade (<a>) e não botão — abrir em outra
+// aba, copiar o endereço e o clique do meio são coisas que quem navega espera
+// de uma saída dessas.
+export function HomeButton({ className = '' }) {
+  return (
+    <a href="https://bonbap.com.br" title="Voltar para o bonbap.com.br"
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-3xl border border-line bg-surface',
+        'px-3.5 py-2 text-[12.5px] font-semibold text-coral no-underline shadow-sm transition hover:bg-cream',
+        className,
+      )}>
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+        <path d="M9.6 3.2 4.8 8l4.8 4.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      bonbap
+    </a>
+  );
+}
+
+// No celular a tela inicial passou a ser a lista, então o mapa virou destino e
+// não ponto de partida. Esta linha é o topo das telas cheias do celular: a
+// saída pro bonbap de um lado, a entrada no mapa do outro.
+function OverlayTopRow({ onViewMap }) {
+  return (
+    <div className="mb-3.5 flex items-center gap-2">
+      <HomeButton />
+      <div className="flex-1" />
+      {onViewMap && (
+        <Button onClick={onViewMap} variant="outline" size="sm" className="shrink-0"
+          icon={(
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M8 14.5S13 9 13 5.6A5 5 0 0 0 3 5.6C3 9 8 14.5 8 14.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+              <circle cx="8" cy="5.5" r="1.8" fill="currentColor" />
+            </svg>
+          )}>
+          Ver no mapa
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
 
@@ -904,9 +931,7 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onBack, seletor, va
     <div style={isPanel
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
       : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
-      {!isPanel && onBack && (
-        <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[13.5px] shadow-none mb-3 self-start">‹ Voltar</Button>
-      )}
+      {!isPanel && <OverlayTopRow onViewMap={onViewMap} />}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="section-title" style={{ fontFamily: 'var(--display-font)', fontSize: isPanel ? 20 : 24, fontWeight: 400, color: C.ink, flex: 1 }}>Quero ir</div>
@@ -951,7 +976,7 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onBack, seletor, va
   );
 }
 
-function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, seletor, variant, menuDaLista }) {
+function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, seletor, variant, menuDaLista }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [menu, abrirMenu, fecharMenu] = useContextMenu();
@@ -961,9 +986,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onBack, sel
     <div style={isPanel
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
       : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
-      {onBack && (
-        <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Mapa</Button>
-      )}
+      {!isPanel && <OverlayTopRow onViewMap={onViewMap} />}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="section-title" style={{ fontFamily: 'var(--display-font)', fontSize: 24, fontWeight: 400, color: C.ink, flex: 1 }}>{canEdit ? 'Minhas listas' : 'Lista do Bon'}</div>
@@ -1245,10 +1268,9 @@ function PhotoLightbox({ photos, openId, onSetId, onClose }) {
 
 const SORT_LABELS = {
   padrao: 'Padrão',
-  rank: 'Rank',
+  nota: 'Nota',
   categoria: 'Categoria',
   distancia: 'Distância',
-  nota: 'Nota',
   valor: 'Valor',
 };
 
@@ -1289,7 +1311,7 @@ function PlaceThumb({ place, list, onClick }) {
   );
 }
 
-function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover }) {
+function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover }) {
   const C = getTheme();
 
   const fromPlace = () => ({
@@ -1414,7 +1436,7 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
     .map(id => (todasListas || []).find(l => l.id === id))
     .filter(Boolean);
   const semNadaNoRodape = p.rating == null && !p.category && p.avg_price == null
-    && p.distanceKm == null && !(list.ranking_enabled && rank != null) && outrasListas.length === 0;
+    && p.distanceKm == null && outrasListas.length === 0;
 
   return (
     <WindowCard>
@@ -1438,7 +1460,6 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
                 <span style={{ fontFamily: 'var(--display-font)', fontSize: 16, fontWeight: 400 }}>{p.rating}</span>
               </div>
             )}
-            {list.ranking_enabled && rank != null && tagMini(`#${rank}`, C.coral)}
             {p.category && tagMini(p.category)}
             {p.avg_price != null && tagMini(`R$ ${Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
             {p.distanceKm != null && tagMini(p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`)}
@@ -1546,7 +1567,7 @@ function PlaceRow({ place: p, list, todasListas, rank, canEdit, expanded, onTogg
   );
 }
 
-function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onToggleRanking, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant }) {
+function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [menu, abrirMenu, fecharMenu] = useContextMenu();
@@ -1560,13 +1581,12 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
 
   const sortOptions = useMemo(() => {
     const opts = ['padrao'];
-    if (list.ranking_enabled) opts.push('rank');
-    if (hasCategories) opts.push('categoria');
     if (hasRatings) opts.push('nota');
+    if (hasCategories) opts.push('categoria');
     if (hasPrices) opts.push('valor');
     if (origem) opts.push('distancia');
     return opts;
-  }, [list.ranking_enabled, hasCategories, hasRatings, hasPrices, origem]);
+  }, [hasCategories, hasRatings, hasPrices, origem]);
 
   useEffect(() => {
     if (!sortOptions.includes(sortBy)) setSortBy('padrao');
@@ -1577,22 +1597,11 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
     distanceKm: origem ? haversineKm(origem.latitude, origem.longitude, p.latitude, p.longitude) : null,
   })), [places, origem]);
 
-  const ranks = useMemo(() => computeRanks(places), [places]);
-
   const sortedPlaces = useMemo(() => {
     if (sortBy === 'padrao') return withDistance;
     const dir = sortDir === 'asc' ? 1 : -1;
     const sorted = [...withDistance];
-    if (sortBy === 'rank') {
-      sorted.sort((a, b) => {
-        const ra = ranks[a.id], rb = ranks[b.id];
-        if (ra == null && rb == null) return String(a.name).localeCompare(String(b.name), 'pt-BR');
-        if (ra == null) return 1;
-        if (rb == null) return -1;
-        if (ra !== rb) return (ra - rb) * dir;
-        return String(a.name).localeCompare(String(b.name), 'pt-BR');
-      });
-    } else if (NUMERIC_SORT_ACCESSORS[sortBy]) {
+    if (NUMERIC_SORT_ACCESSORS[sortBy]) {
       const accessor = NUMERIC_SORT_ACCESSORS[sortBy];
       sorted.sort((a, b) => {
         const av = accessor(a), bv = accessor(b);
@@ -1610,7 +1619,7 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
       });
     }
     return sorted;
-  }, [withDistance, sortBy, sortDir, ranks]);
+  }, [withDistance, sortBy, sortDir]);
 
   const SEM_CATEGORIA = 'Sem categoria';
   const nomeCategoria = (p) => ((p.category || '').trim() || SEM_CATEGORIA);
@@ -1651,20 +1660,8 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
         </Button>
       )}
 
-      {canEdit && (
-        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Button onClick={onToggleRanking} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent border-none p-0 gap-2 shadow-none cursor-pointer">
-            <div style={{ width: 34, height: 20, borderRadius: 999, background: list.ranking_enabled ? C.coral : C.line, position: 'relative', transition: 'background .15s' }}>
-              <div style={{ position: 'absolute', top: 2, left: list.ranking_enabled ? 16 : 2, width: 16, height: 16, borderRadius: 999, background: '#fff', transition: 'left .15s' }} />
-            </div>
-            <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 12.5, color: C.sub }}>Ranking nesta lista {list.ranking_enabled ? 'ativado' : 'desativado'}</span>
-          </Button>
-          {list.ranking_enabled && (
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: C.sub }}>a posição vem da nota; notas iguais empatam</span>
-          )}
-        </div>
-      )}
-
+      {/* O botão de ligar ranking na lista saiu: numerar #1, #2… era
+          ordenar por nota com outro nome. A nota continua no card e aqui. */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16 }}>
         <span style={{ fontWeight: 700, fontSize: 13.5, color: C.sub }}>Ordenar por</span>
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
@@ -1692,7 +1689,7 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
               </div>
             )}
             {sec.itens.map(p => (
-              <PlaceRow key={p.id} place={p} list={list} todasListas={todasListas} rank={ranks[p.id]} canEdit={canEdit}
+              <PlaceRow key={p.id} place={p} list={list} todasListas={todasListas} canEdit={canEdit}
                 expanded={expandedId === p.id}
                 onToggle={() => setExpandedId(id => (id === p.id ? null : p.id))}
                 onOpenMap={onOpen}

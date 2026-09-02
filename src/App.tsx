@@ -12,11 +12,16 @@ import { errorDetail, isSessionError } from '@/errors';
 import { fetchRoutes, fetchItinerary, MAX_PARADAS, type Modo } from '@/routing';
 import { useLiveLocation } from '@/location';
 import { loadDraft, saveDraft, clearDraft, draftPreenchido } from '@/drafts';
-import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit } from '@/components/mipas';
+import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit, HomeButton } from '@/components/mipas';
 
 // Busca sem acento: "acai" tem que achar "Açaí".
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const semTags = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
+
+// A largura decide o layout inteiro (mapa + barra lateral de um lado, telas
+// cheias do outro), e ela precisa ser conhecida já no primeiro render.
+const MQ_DESKTOP = '(min-width: 720px)';
+const telaGrande = () => window.matchMedia(MQ_DESKTOP).matches;
 
 export default function App() {
   const C = getTheme();
@@ -38,7 +43,10 @@ export default function App() {
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  const [tab, setTab] = useState('map');
+  // No celular a tela inicial é a lista, não o mapa: quem abre o Mipas no
+  // telefone quer primeiro ver o que tem guardado, e só depois olhar onde
+  // fica. No desktop nada muda — lá o mapa e a barra lateral aparecem juntos.
+  const [tab, setTab] = useState(() => (telaGrande() ? 'map' : 'lists'));
   const [openListId, setOpenListId] = useState(sharedMode ? sharedListId : null);
   const [selId, setSelId] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -52,7 +60,7 @@ export default function App() {
   const [pendingListPick, setPendingListPick] = useState(false);
   const [editingList, setEditingList] = useState(null);
   const [homeOpen, setHomeOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
+  const [isDesktop, setIsDesktop] = useState(telaGrande);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [returnListId, setReturnListId] = useState(null);
   const [themeMode, setThemeMode] = useState(() => (document.documentElement.classList.contains('dark') ? 'dark' : 'light'));
@@ -272,7 +280,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 720px)');
+    const mq = window.matchMedia(MQ_DESKTOP);
     const onChange = (e) => setIsDesktop(e.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
@@ -462,6 +470,14 @@ export default function App() {
     });
   };
 
+  // Sair da tela cheia da lista pro mapa. O invalidateSize é o de sempre:
+  // o Leaflet remede o container depois que ele volta a aparecer.
+  const showMap = () => {
+    setTab('map');
+    setOpenListId(null);
+    setTimeout(() => leafRef.current && leafRef.current.invalidateSize(), 60);
+  };
+
   const goToPlace = (p) => {
     setTab('map');
     if (isDesktop) {
@@ -630,8 +646,7 @@ export default function App() {
       separadorAntes: true, onClick: () => toggleListHidden(l, 'hidden_for_owner') },
     { rotulo: l.hidden_for_visitor ? 'Mostrar no mapa dos visitantes' : 'Ocultar do mapa dos visitantes',
       onClick: () => toggleListHidden(l, 'hidden_for_visitor') },
-    { rotulo: l.ranking_enabled ? 'Desativar ranking' : 'Ativar ranking', separadorAntes: true, onClick: () => toggleRanking(l) },
-    { rotulo: l.is_public ? 'Copiar link' : 'Tornar pública e copiar link', onClick: () => shareList(l) },
+    { rotulo: l.is_public ? 'Copiar link' : 'Tornar pública e copiar link', separadorAntes: true, onClick: () => shareList(l) },
     { rotulo: 'Adicionar novo lugar…', onClick: () => novoLugarNaLista(l) },
     { rotulo: 'Excluir lista', perigo: true, separadorAntes: true, onClick: () => removeList(l) },
   ];
@@ -835,15 +850,6 @@ export default function App() {
     } catch (e) {
       setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, cover_photo_id: antes } : p)));
       fail('Não deu pra escolher a foto do mapa', e);
-    }
-  };
-
-  const toggleRanking = async (list) => {
-    try {
-      const updated = await data.updateList(list.id, { ranking_enabled: !list.ranking_enabled });
-      setLists(ls => ls.map(l => (l.id === updated.id ? updated : l)));
-    } catch (e) {
-      fail('Não deu pra atualizar a lista', e);
     }
   };
 
@@ -1058,7 +1064,7 @@ export default function App() {
           onOpenList={setOpenListId}
           onNewList={() => setNewListOpen(true)}
           menuDaLista={canEdit ? menuDaLista : null}
-          onBack={() => setTab('map')}
+          onViewMap={showMap}
           seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
         />
@@ -1071,7 +1077,7 @@ export default function App() {
           onNew={() => { setSearchTarget('wish'); setSearchOpen(true); }}
           onFui={marcarFui}
           onRemove={removeWish}
-          onBack={() => setTab('map')}
+          onViewMap={showMap}
           seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
         />
@@ -1093,7 +1099,6 @@ export default function App() {
           onRemovePhoto={removePhoto}
           onReorderPhotos={reorderPhotos}
           onSetCover={setCoverPhoto}
-          onToggleRanking={() => toggleRanking(openList)}
           onBuildItinerary={() => montarRoteiroDaLista(openList)}
           onAddPlace={() => novoLugarNaLista(openList)}
           onDeleteList={() => removeList(openList)}
@@ -1108,7 +1113,7 @@ export default function App() {
           {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => {
             const ativa = k === 'map' ? tab === 'map' : tab !== 'map';
             return (
-              <Button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} variant={ativa ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
+              <Button key={k} onClick={() => { if (k === 'map') { showMap(); return; } setTab(k); setOpenListId(null); }} variant={ativa ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
             );
           })}
         </div>
@@ -1203,15 +1208,19 @@ export default function App() {
 
     {isDesktop && !sidebarHidden && (
       <div style={{ width: 'clamp(360px, 38%, 620px)', flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {canEdit && !openList && (
-          <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
+        {/* Fora dos painéis de propósito: assim a saída pro bonbap continua
+            no lugar quando a barra troca de conteúdo (listas, quero ir, lista
+            aberta). No celular ela vive no topo da tela de listas. */}
+        <div style={{ padding: '14px 20px 0', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <HomeButton />
+          {canEdit && !openList && (
             <Dropdown
               valor={tab === 'wish' ? 'wish' : 'lists'}
               opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]}
               onEscolher={setTab}
             />
-          </div>
-        )}
+          )}
+        </div>
         {!openList && tab === 'wish' && canEdit ? (
           <WishPanel
             wishes={wishes}
@@ -1237,7 +1246,6 @@ export default function App() {
             onRemovePhoto={removePhoto}
             onReorderPhotos={reorderPhotos}
             onSetCover={setCoverPhoto}
-            onToggleRanking={() => toggleRanking(openList)}
             onBuildItinerary={() => montarRoteiroDaLista(openList)}
             onAddPlace={() => novoLugarNaLista(openList)}
             onDeleteList={() => removeList(openList)}
