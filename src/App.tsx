@@ -14,12 +14,9 @@ import { useLiveLocation } from '@/location';
 import { loadDraft, saveDraft, clearDraft, draftPreenchido } from '@/drafts';
 import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit, HomeButton } from '@/components/mipas';
 
-// Busca sem acento: "acai" tem que achar "Açaí".
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const semTags = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
 
-// A largura decide o layout inteiro (mapa + barra lateral de um lado, telas
-// cheias do outro), e ela precisa ser conhecida já no primeiro render.
 const MQ_DESKTOP = '(min-width: 720px)';
 const telaGrande = () => window.matchMedia(MQ_DESKTOP).matches;
 
@@ -43,9 +40,7 @@ export default function App() {
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  // No celular a tela inicial é a lista, não o mapa: quem abre o Mipas no
-  // telefone quer primeiro ver o que tem guardado, e só depois olhar onde
-  // fica. No desktop nada muda — lá o mapa e a barra lateral aparecem juntos.
+
   const [tab, setTab] = useState(() => (telaGrande() ? 'map' : 'lists'));
   const [openListId, setOpenListId] = useState(sharedMode ? sharedListId : null);
   const [selId, setSelId] = useState(null);
@@ -102,8 +97,6 @@ export default function App() {
 
   const canEdit = !sharedMode && !!session;
 
-  // Fechar a aba sem querer no meio do formulário não pode custar o que já foi
-  // digitado: o rascunho fica guardado e volta sozinho no próximo login.
   useEffect(() => {
     if (!canEdit) return;
     setDraft(d => d || loadDraft('place'));
@@ -132,17 +125,12 @@ export default function App() {
     setWishDraft(null);
   };
 
-  // De onde tudo é medido. A posição ao vivo manda; a casa entra quando é ela a
-  // escolhida — ou quando o GPS ainda não pegou sinal, pra distância nunca
-  // sumir de quem já tinha casa definida.
   const origem = useMemo(() => {
     const doGps = gps.pos ? { tipo: 'gps', latitude: gps.pos.latitude, longitude: gps.pos.longitude } : null;
     const daCasa = home ? { tipo: 'home', latitude: home.latitude, longitude: home.longitude } : null;
     return origemPref === 'home' ? (daCasa || doGps) : (doGps || daCasa);
   }, [origemPref, gps.pos, home]);
 
-  // Andar meio metro não pode virar requisição nova pro roteador: o trajeto só
-  // é refeito quando a origem se move mais de 50 m.
   useEffect(() => {
     setOrigemRota(anterior => {
       if (!origem) return null;
@@ -163,8 +151,6 @@ export default function App() {
 
   const filtrando = hiddenListIds.length > 0 || pickedCategories.length > 0 || minRating != null;
 
-  // Um lugar em várias listas continua no mapa enquanto ALGUMA delas estiver
-  // visível — esconder uma lista nunca some com o que também está em outra.
   const cabeNoFiltro = (p) => {
     const listasDoLugar = p.list_ids || [];
     if (listasDoLugar.length > 0 && listasDoLugar.every(id => hiddenListIds.includes(id))) return false;
@@ -469,8 +455,8 @@ export default function App() {
     });
   };
 
-  // O invalidateSize é o de sempre: o Leaflet remede o container depois
-  // que ele volta a aparecer.
+  // Sair da tela cheia da lista pro mapa. O invalidateSize é o de sempre:
+  // o Leaflet remede o container depois que ele volta a aparecer.
   const showMap = () => {
     setTab('map');
     setOpenListId(null);
