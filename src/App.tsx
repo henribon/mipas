@@ -178,7 +178,6 @@ export default function App() {
     [places, hiddenListIds, pickedCategories, minRating],
   );
 
-  /** Desfaz só o filtro que estaria escondendo este lugar — usado ao guardar um novo. */
   const revelarLugar = (p) => {
     setHiddenListIds(ids => ids.filter(id => !(p.list_ids || []).includes(id)));
     setPickedCategories(cs => (cs.length && !cs.includes((p.category || '').trim()) ? [] : cs));
@@ -470,8 +469,8 @@ export default function App() {
     });
   };
 
-  // Sair da tela cheia da lista pro mapa. O invalidateSize é o de sempre:
-  // o Leaflet remede o container depois que ele volta a aparecer.
+  // O invalidateSize é o de sempre: o Leaflet remede o container depois
+  // que ele volta a aparecer.
   const showMap = () => {
     setTab('map');
     setOpenListId(null);

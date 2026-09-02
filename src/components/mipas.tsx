@@ -893,9 +893,8 @@ export function HomeButton({ className = '' }) {
   );
 }
 
-// No celular a tela inicial passou a ser a lista, então o mapa virou destino e
-// não ponto de partida. Esta linha é o topo das telas cheias do celular: a
-// saída pro bonbap de um lado, a entrada no mapa do outro.
+// No celular a tela inicial passou a ser a lista, então o mapa virou destino
+// e não ponto de partida — daí a entrada pro mapa morar aqui em cima.
 function OverlayTopRow({ onViewMap }) {
   return (
     <div className="mb-3.5 flex items-center gap-2">
@@ -1145,7 +1144,6 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
       {canEdit && (
         <button onClick={() => onRemove(ph)} onPointerDown={ev => ev.stopPropagation()} style={{ position: 'absolute', top: 3, right: 3, width: 19, height: 19, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: '19px', padding: 0 }}>✕</button>
       )}
-      {/* Uma marca por estado: a capa se anuncia, as outras oferecem virar capa. */}
       {podeEscolherCapa && ehCapa(ph) && (
         <div style={{
           position: 'absolute', left: 1, right: 1, bottom: 1, background: C.coral, color: 'var(--coral-texto)',
@@ -1440,7 +1438,6 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
 
   return (
     <WindowCard>
-      {/* Foto sobre nota/tags de um lado; nome, endereço e resenha do outro. */}
       <div onClick={expanded ? undefined : clique} onDoubleClick={expanded ? undefined : duploClique}
         title={expanded ? undefined : 'Clique para abrir, duplo clique para ver no mapa'}
         // Altura fixa de propósito: é ela que dá o limite pra resenha rolar dentro
@@ -1660,8 +1657,6 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
         </Button>
       )}
 
-      {/* O botão de ligar ranking na lista saiu: numerar #1, #2… era
-          ordenar por nota com outro nome. A nota continua no card e aqui. */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16 }}>
         <span style={{ fontWeight: 700, fontSize: 13.5, color: C.sub }}>Ordenar por</span>
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
@@ -2119,7 +2114,6 @@ function ItineraryPanel({
   );
 }
 
-/** Linha de resultado da busca entre os lugares já guardados. */
 function PlaceHit({ place, lists, onClick }) {
   const C = getTheme();
   const doLugar = (place.list_ids || []).map(id => lists.find(l => l.id === id)).filter(Boolean);

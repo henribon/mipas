@@ -122,7 +122,6 @@ export function clearRoute(layerRef: { current: L.LayerGroup | null }) {
   }
 }
 
-/** Desenha carro (linha cheia) e a pé (tracejada) e enquadra o trajeto todo. */
 export function drawRoute(
   map: L.Map,
   layerRef: { current: L.LayerGroup | null },
