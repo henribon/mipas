@@ -7,11 +7,8 @@ type ApiError = {
   error_description?: string;
 };
 
-// PGRST301/302: o PostgREST recebeu um JWT vencido ou inválido.
-// 42501: o Postgres tratou a requisição como anônima e negou a permissão.
 const SESSION_CODES = ['PGRST301', 'PGRST302', '42501'];
 
-/** O pedido chegou ao Supabase sem um login válido (sessão vencida ou ausente). */
 export function isSessionError(e: unknown): boolean {
   const err = (e || {}) as ApiError;
   if (err.status === 401 || err.status === 403) return true;
@@ -20,7 +17,6 @@ export function isSessionError(e: unknown): boolean {
   return /jwt|refresh token|not authenticated|row-level security/.test(text);
 }
 
-/** Mensagem crua do Supabase, pro alerta dizer o que de fato aconteceu. */
 export function errorDetail(e: unknown): string {
   const err = (e || {}) as ApiError;
   const parts = [err.message || err.error_description, err.details, err.hint].filter(Boolean);

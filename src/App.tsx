@@ -1,347 +1,107 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Dropdown } from '@/components/ui/dropdown';
 import { cn } from '@/lib/utils';
-import { getTheme, setTheme, initialTheme, listColors } from '@/theme';
+import { getTheme, listColors } from '@/theme';
 import * as data from '@/data';
 import * as mapa from '@/map';
-import { auth, LoginForm } from '@/auth';
-import { debounce, geocodeAddress, haversineKm } from '@/geocoding';
-import { errorDetail, isSessionError } from '@/errors';
-import { fetchRoutes, fetchItinerary, MAX_PARADAS, type Modo } from '@/routing';
-import { useLiveLocation } from '@/location';
-import { loadDraft, saveDraft, clearDraft, draftPreenchido } from '@/drafts';
-import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit } from '@/components/mipas';
-
-// Busca sem acento: "acai" tem que achar "Açaí".
-const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const semTags = (s) => String(s || '').replace(/<[^>]*>/g, ' ');
+import { LoginForm } from '@/auth';
+import { haversineKm } from '@/geocoding';
+import { MAX_PARADAS } from '@/routing';
+import { clearDraft } from '@/drafts';
+import { telaGrande, useIsDesktop } from '@/hooks/useIsDesktop';
+import { useThemeMode } from '@/hooks/useThemeMode';
+import { useSession } from '@/hooks/useSession';
+import { useMipasData } from '@/hooks/useMipasData';
+import { usePlaceFilters } from '@/hooks/usePlaceFilters';
+import { useOrigin } from '@/hooks/useOrigin';
+import { useDrafts } from '@/hooks/useDrafts';
+import { useSearch } from '@/hooks/useSearch';
+import { useItinerary } from '@/hooks/useItinerary';
+import { useMipasMap } from '@/hooks/useMipasMap';
+import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit, HomeButton } from '@/components/mipas';
 
 export default function App() {
   const C = getTheme();
-  
+
   const sharedListId = useMemo(() => new URLSearchParams(window.location.search).get('list'), []);
   const sharedMode = !!sharedListId;
 
-  const [session, setSession] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const isDesktop = useIsDesktop();
+  const { themeMode, toggleTheme } = useThemeMode();
+  const { session, authReady, canEdit, loginOpen, setLoginOpen, fail, handleAuthButtonClick } = useSession(sharedMode);
 
-  const [lists, setLists] = useState([]);
-  const [places, setPlaces] = useState([]);
-  const [home, setHome] = useState(null);
-  const [wishes, setWishes] = useState([]);
-  const [wishDraft, setWishDraft] = useState(null);
-  const [savingWish, setSavingWish] = useState(false);
-  const [searchTarget, setSearchTarget] = useState('place');
-  const [loadingData, setLoadingData] = useState(true);
-  const [loadError, setLoadError] = useState('');
-
-  const [tab, setTab] = useState('map');
+  const [tab, setTab] = useState(() => (telaGrande() ? 'map' : 'lists'));
   const [openListId, setOpenListId] = useState(sharedMode ? sharedListId : null);
   const [selId, setSelId] = useState(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [draft, setDraft] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [returnListId, setReturnListId] = useState(null);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [routePlaceId, setRoutePlaceId] = useState(null);
+
   const [newListOpen, setNewListOpen] = useState(false);
   const [creatingList, setCreatingList] = useState(false);
   const [pendingListPick, setPendingListPick] = useState(false);
   const [editingList, setEditingList] = useState(null);
   const [homeOpen, setHomeOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 720px)').matches);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
-  const [returnListId, setReturnListId] = useState(null);
-  const [themeMode, setThemeMode] = useState(() => (document.documentElement.classList.contains('dark') ? 'dark' : 'light'));
+  const [saving, setSaving] = useState(false);
+  const [savingWish, setSavingWish] = useState(false);
 
-  const toggleTheme = () => {
-    const next = themeMode === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    setThemeMode(next);
-  };
+  const {
+    lists, setLists, places, setPlaces, home, wishes, setWishes,
+    loadingData, loadError, loadId,
+    setListColor, removePlaceFromList, shareList, savePlaceEdits,
+    addPhoto, reorderPhotos, removePhoto, setCoverPhoto, removeWish,
+    saveHome: gravarCasa, removeHome: apagarCasa,
+  } = useMipasData({ sharedMode, sharedListId, authReady, session, canEdit, fail });
 
-  const [routePlaceId, setRoutePlaceId] = useState(null);
-  const [route, setRoute] = useState(null);
-  const [routeLoading, setRouteLoading] = useState(false);
+  const {
+    layersOpen, setLayersOpen,
+    hiddenListIds, setHiddenListIds,
+    pickedCategories, setPickedCategories,
+    minRating, setMinRating,
+    categories, filtrando, visiblePlaces, revelarLugar, mostrarSomente,
+  } = usePlaceFilters(places);
 
-  const [layersOpen, setLayersOpen] = useState(false);
-  const [hiddenListIds, setHiddenListIds] = useState([]);
-  const [pickedCategories, setPickedCategories] = useState([]);
-  const [minRating, setMinRating] = useState(null);
+  const { gps, origem, origemRota, origemPref, setOrigemPref, originOpen, setOriginOpen } = useOrigin(home);
+  const { draft, setDraft, wishDraft, setWishDraft, descartarDraft, descartarWishDraft } = useDrafts(canEdit);
 
-  const gps = useLiveLocation();
-  const [origemPref, setOrigemPref] = useState('gps');
-  const [originOpen, setOriginOpen] = useState(false);
-  const [origemRota, setOrigemRota] = useState(null);
+  const {
+    searchOpen, setSearchOpen, searchTarget, setSearchTarget,
+    query, setQuery, results, setResults, searching,
+    debouncedSearch, matchPlaces, fecharBusca,
+  } = useSearch({ places, lists, canEdit });
 
-  const [itineraryOpen, setItineraryOpen] = useState(false);
-  const [stopIds, setStopIds] = useState([]);
-  const [itineraryMode, setItineraryMode] = useState<Modo>('driving');
-  const [optimize, setOptimize] = useState(true);
-  const [fromOrigin, setFromOrigin] = useState(false);
-  const [itinerary, setItinerary] = useState(null);
-  const [itineraryLoading, setItineraryLoading] = useState(false);
+  const {
+    itineraryOpen, setItineraryOpen, stopIds, setStopIds,
+    itineraryMode, setItineraryMode, optimize, setOptimize,
+    fromOrigin, setFromOrigin, toggleStop, moveStop,
+  } = useItinerary();
 
-  const mapRef = useRef(null);
-  const leafRef = useRef(null);
-  const markersRef = useRef({});
-  const routeLayerRef = useRef(null);
-  const itineraryLayerRef = useRef(null);
-  const meLayerRef = useRef(null);
-
-  const canEdit = !sharedMode && !!session;
-
-  // Fechar a aba sem querer no meio do formulário não pode custar o que já foi
-  // digitado: o rascunho fica guardado e volta sozinho no próximo login.
-  useEffect(() => {
-    if (!canEdit) return;
-    setDraft(d => d || loadDraft('place'));
-    setWishDraft(d => d || loadDraft('wish'));
-  }, [canEdit]);
-
-  useEffect(() => {
-    if (draftPreenchido(draft)) saveDraft('place', draft);
-    else if (draft) clearDraft('place');
-  }, [draft]);
-
-  useEffect(() => {
-    if (draftPreenchido(wishDraft)) saveDraft('wish', wishDraft);
-    else if (wishDraft) clearDraft('wish');
-  }, [wishDraft]);
-
-  const descartarDraft = () => {
-    if (draftPreenchido(draft) && !confirm('Descartar o que você preencheu sobre esse lugar?')) return;
-    clearDraft('place');
-    setDraft(null);
-  };
-
-  const descartarWishDraft = () => {
-    if (draftPreenchido(wishDraft) && !confirm('Descartar o que você preencheu sobre esse lugar?')) return;
-    clearDraft('wish');
-    setWishDraft(null);
-  };
-
-  // De onde tudo é medido. A posição ao vivo manda; a casa entra quando é ela a
-  // escolhida — ou quando o GPS ainda não pegou sinal, pra distância nunca
-  // sumir de quem já tinha casa definida.
-  const origem = useMemo(() => {
-    const doGps = gps.pos ? { tipo: 'gps', latitude: gps.pos.latitude, longitude: gps.pos.longitude } : null;
-    const daCasa = home ? { tipo: 'home', latitude: home.latitude, longitude: home.longitude } : null;
-    return origemPref === 'home' ? (daCasa || doGps) : (doGps || daCasa);
-  }, [origemPref, gps.pos, home]);
-
-  // Andar meio metro não pode virar requisição nova pro roteador: o trajeto só
-  // é refeito quando a origem se move mais de 50 m.
-  useEffect(() => {
-    setOrigemRota(anterior => {
-      if (!origem) return null;
-      const perto = anterior && anterior.tipo === origem.tipo
-        && haversineKm(anterior.latitude, anterior.longitude, origem.latitude, origem.longitude) < 0.05;
-      return perto ? anterior : origem;
-    });
-  }, [origem]);
-
-  const categories = useMemo(() => {
-    const nomes = [];
-    places.forEach(p => {
-      const c = (p.category || '').trim();
-      if (c && !nomes.includes(c)) nomes.push(c);
-    });
-    return nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [places]);
-
-  const filtrando = hiddenListIds.length > 0 || pickedCategories.length > 0 || minRating != null;
-
-  // Um lugar em várias listas continua no mapa enquanto ALGUMA delas estiver
-  // visível — esconder uma lista nunca some com o que também está em outra.
-  const cabeNoFiltro = (p) => {
-    const listasDoLugar = p.list_ids || [];
-    if (listasDoLugar.length > 0 && listasDoLugar.every(id => hiddenListIds.includes(id))) return false;
-    if (pickedCategories.length > 0 && !pickedCategories.includes((p.category || '').trim())) return false;
-    if (minRating != null && !(p.rating != null && Number(p.rating) >= minRating)) return false;
-    return true;
-  };
-
-  const visiblePlaces = useMemo(
-    () => places.filter(cabeNoFiltro),
-    [places, hiddenListIds, pickedCategories, minRating],
-  );
-
-  /** Desfaz só o filtro que estaria escondendo este lugar — usado ao guardar um novo. */
-  const revelarLugar = (p) => {
-    setHiddenListIds(ids => ids.filter(id => !(p.list_ids || []).includes(id)));
-    setPickedCategories(cs => (cs.length && !cs.includes((p.category || '').trim()) ? [] : cs));
-    setMinRating(r => (r != null && !(p.rating != null && Number(p.rating) >= r) ? null : r));
-  };
-
-  const toggleStop = (id) => setStopIds(ids => (
-    ids.includes(id) ? ids.filter(x => x !== id) : (ids.length >= MAX_PARADAS ? ids : [...ids, id])
-  ));
-
-  const moveStop = (id, passo) => setStopIds(ids => {
-    const i = ids.indexOf(id);
-    const destino = i + passo;
-    if (i < 0 || destino < 0 || destino >= ids.length) return ids;
-    const novo = [...ids];
-    novo.splice(destino, 0, novo.splice(i, 1)[0]);
-    return novo;
-  });
-
-  const abrirRoteiro = () => {
-    setItineraryOpen(true);
-    setLayersOpen(false);
-    setRoutePlaceId(null);
-    setSelId(null);
-  };
-
-  // Roteiro a partir de uma lista: o mapa passa a mostrar só ela, e as paradas
-  // saem daí — o painel escolhe entre o que está visível.
-  const montarRoteiroDaLista = (list) => {
-    setHiddenListIds(lists.filter(l => l.id !== list.id).map(l => l.id));
-    setPickedCategories([]);
-    setMinRating(null);
-    setStopIds([]);
-    setOpenListId(null);
-    setTab('map');
-    abrirRoteiro();
-    setTimeout(() => leafRef.current && leafRef.current.invalidateSize(), 60);
-  };
-
-  const offsetRoteiro = (itineraryOpen && fromOrigin && origemRota) ? 1 : 0;
-
-  // Com a ordem otimizada, quem manda na numeração é o que o roteador devolveu;
-  // sem roteiro traçado ainda, vale a ordem em que as paradas foram escolhidas.
-  const stopIdsEmOrdem = useMemo(() => {
-    if (!itinerary || itinerary.order.length !== stopIds.length + offsetRoteiro) return stopIds;
-    return itinerary.order.filter(i => i >= offsetRoteiro).map(i => stopIds[i - offsetRoteiro]);
-  }, [itinerary, stopIds, offsetRoteiro]);
-
-  useEffect(() => {
-    auth.getSession().then(s => { setSession(s); setAuthReady(true); });
-    const sub = auth.onChange(s => setSession(s));
-    return () => sub.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!authReady) return;
-    setLoadingData(true);
-    const loadPromise = sharedMode
-      ? Promise.all([
-          data.fetchListById(sharedListId).then(l => (l ? [l] : [])),
-          data.fetchPlacesByListId(sharedListId),
-        ])
-      : Promise.all([data.fetchLists(), data.fetchPlaces()]);
-
-    loadPromise
-      .then(([ls, ps]) => {
-        setLists(ls);
-        setPlaces(ps);
-        // Lista marcada como oculta comeca fora do mapa. E so o ponto de
-        // partida: o painel de Camadas continua podendo revelar na sessao.
-        // Link direto e excecao — quem abriu a lista pelo link quer ve-la.
-        if (!sharedMode) {
-          const campo = canEdit ? 'hidden_for_owner' : 'hidden_for_visitor';
-          // O cast existe só pro TypeScript: o parser de tipos do supabase-js
-          // desiste de inferir a linha do select depois que ela ficou longa.
-          setHiddenListIds((ls as any[]).filter(l => l[campo]).map(l => l.id));
-        }
-        setLoadError(sharedMode && ls.length === 0 ? 'Essa lista não está disponível.' : '');
-      })
-      .catch(e => {
-        console.error('[Mipas] não deu pra carregar os dados:', e);
-        setLoadError('Não deu pra carregar os dados: ' + errorDetail(e));
-      })
-      .finally(() => setLoadingData(false));
-  }, [authReady, session]);
-
-  useEffect(() => {
-    if (!canEdit) { setHome(null); setWishes([]); return; }
-    data.fetchHome().then(setHome).catch(() => setHome(null));
-    data.fetchWishes().then(setWishes).catch(() => setWishes([]));
-  }, [canEdit]);
-
-  useEffect(() => {
-    const m = mapa.initMap(mapRef.current);
-    leafRef.current = m;
-    m.on('click', () => { setSelId(null); setReturnListId(null); });
-    setTimeout(() => m.invalidateSize(), 300);
-    return () => m.remove();
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 720px)');
-    const onChange = (e) => setIsDesktop(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-
-  useEffect(() => {
-    if (leafRef.current) setTimeout(() => leafRef.current.invalidateSize(), 250);
-  }, [isDesktop]);
-
-  useEffect(() => {
-    const m = leafRef.current;
-    if (!m) return;
-    mapa.syncMarkers(m, markersRef, visiblePlaces, lists, (p) => {
-      // Montando roteiro, tocar no pin é escolher a parada — o card do lugar
-      // sairia na frente do painel e roubaria o gesto.
-      if (itineraryOpen) { toggleStop(p.id); return; }
+  const {
+    mapRef, leafRef, route, routeLoading, itinerary, itineraryLoading,
+    invalidarTamanho, voarPara,
+  } = useMipasMap({
+    places, visiblePlaces, lists, isDesktop, sharedMode,
+    openListId, selId, setSelId, gpsPos: gps.pos, routePlaceId, origemRota,
+    itineraryOpen, stopIds, itineraryMode, optimize, fromOrigin,
+    onEscolherParada: (p) => toggleStop(p.id),
+    onAbrirLugar: (p) => {
       setSelId(p.id);
       setTab('map');
       setOpenListId(null);
       setReturnListId(null);
-      m.flyTo([p.latitude, p.longitude], Math.max(m.getZoom(), 14), { duration: .6 });
-    });
-  }, [visiblePlaces, lists, itineraryOpen]);
+    },
+    onCliqueNoMapa: () => { setSelId(null); setReturnListId(null); },
+    fail,
+  });
 
-  // O mapa abria sempre no mesmo ponto fixo de São Paulo, num zoom que
-  // amontoava os pins num canto (ou deixava tudo fora da tela). Na primeira
-  // carga ele passa a enquadrar os seus lugares. Uma vez só: depois disso a
-  // câmera é sua, e mexer nela sozinho no meio do uso seria pior que o zoom fixo.
-  const enquadrouAoAbrir = useRef(false);
   useEffect(() => {
-    const m = leafRef.current;
-    if (!m || enquadrouAoAbrir.current) return;
-    // Lista aberta por link compartilhado já tem quem a enquadre.
-    if (openListId) return;
-    const doMiolo = mapa.semExtremos(visiblePlaces);
-    if (doMiolo.length === 0) return;
-    enquadrouAoAbrir.current = true;
-    mapa.fitPlaces(m, doMiolo);
-  }, [visiblePlaces, openListId]);
+    if (sharedMode || loadId === 0) return;
+    const campo = canEdit ? 'hidden_for_owner' : 'hidden_for_visitor';
+    setHiddenListIds((lists as any[]).filter(l => l[campo]).map(l => l.id));
+  }, [loadId]);
 
-  // Abrir uma lista no desktop enquadra a lista inteira: a câmera vai pro meio
-  // dos lugares e abre o zoom até todos caberem. Só no desktop porque no
-  // celular a lista ocupa a tela e o mapa nem está à vista.
-  //
-  // O ref evita reenquadrar a cada mudança em places: quem está mexendo na
-  // lista aberta (guardando foto, editando lugar) não pode ver a câmera pular.
-  // Enquadra uma vez por lista aberta, e de novo se a lista for reaberta.
-  const listaEnquadrada = useRef(null);
-  useEffect(() => {
-    const m = leafRef.current;
-    if (!m || !isDesktop || !openListId) {
-      listaEnquadrada.current = null;
-      return;
-    }
-    if (listaEnquadrada.current === openListId) return;
-    const daLista = visiblePlaces.filter(p => (p.list_ids || []).includes(openListId));
-    // Lista ainda carregando (ou toda escondida por filtro): tenta de novo
-    // quando os lugares chegarem, em vez de marcar como enquadrada.
-    if (daLista.length === 0) return;
-    listaEnquadrada.current = openListId;
-    mapa.fitPlaces(m, daLista, selId ? 240 : 60);
-  }, [openListId, isDesktop, visiblePlaces]);
-
-  // Filtrar até esconder o lugar aberto deixaria um card solto na tela, sem pin.
-  useEffect(() => {
-    if (selId && !visiblePlaces.some(p => p.id === selId)) setSelId(null);
-  }, [visiblePlaces, selId]);
-
-  // Parada que sumiu do mapa (ou do banco) não pode continuar contando no roteiro.
   useEffect(() => {
     setStopIds(ids => {
       const validos = ids.filter(id => visiblePlaces.some(p => p.id === id));
@@ -349,117 +109,19 @@ export default function App() {
     });
   }, [visiblePlaces]);
 
-  useEffect(() => {
-    if (!sharedMode || places.length === 0) return;
-    const m = leafRef.current;
-    if (!m) return;
-    const first = places[0];
-    setTimeout(() => m.flyTo([first.latitude, first.longitude], 13, { duration: .6 }), 200);
-  }, [sharedMode, places]);
-
-  // Trocar de lugar (ou fechar o card) descarta o caminho traçado, senão ele
-  // ficaria no mapa apontando pra um lugar que não está mais aberto.
   useEffect(() => { setRoutePlaceId(null); }, [selId]);
 
-  useEffect(() => {
-    const m = leafRef.current;
-    if (!m) return;
-    mapa.clearRoute(routeLayerRef);
-    setRoute(null);
-    const place = places.find(p => p.id === routePlaceId);
-    if (!place || !origemRota) return;
-    let cancelado = false;
-    setRouteLoading(true);
-    fetchRoutes([origemRota.latitude, origemRota.longitude], [place.latitude, place.longitude])
-      .then(r => {
-        if (cancelado || !leafRef.current) return;
-        setRoute(r);
-        mapa.drawRoute(leafRef.current, routeLayerRef, r, 240, origemRota.tipo);
-      })
-      .catch(e => { if (!cancelado) fail('Não deu pra traçar o caminho até esse lugar', e); })
-      .finally(() => { if (!cancelado) setRouteLoading(false); });
-    return () => { cancelado = true; };
-  }, [routePlaceId, origemRota]);
+  const offsetRoteiro = (itineraryOpen && fromOrigin && origemRota) ? 1 : 0;
 
-  useEffect(() => {
-    if (leafRef.current) mapa.syncMe(leafRef.current, meLayerRef, gps.pos);
-  }, [gps.pos]);
+  const stopIdsEmOrdem = useMemo(() => {
+    if (!itinerary || itinerary.order.length !== stopIds.length + offsetRoteiro) return stopIds;
+    return itinerary.order.filter(i => i >= offsetRoteiro).map(i => stopIds[i - offsetRoteiro]);
+  }, [itinerary, stopIds, offsetRoteiro]);
 
-  // O roteiro se redesenha sozinho a cada mudança, mas com uma pausa antes de
-  // sair pedindo: o Valhalla público é de cortesia e marcar cinco paradas
-  // seguidas não pode virar cinco requisições.
-  useEffect(() => {
-    const m = leafRef.current;
-    if (!m) return;
-    mapa.clearRoute(itineraryLayerRef);
-    setItinerary(null);
-    if (!itineraryOpen) return;
-
-    const paradas = stopIds.map(id => places.find(p => p.id === id)).filter(Boolean);
-    const pontos: [number, number][] = [
-      ...(fromOrigin && origemRota ? [[origemRota.latitude, origemRota.longitude] as [number, number]] : []),
-      ...paradas.map(p => [p.latitude, p.longitude] as [number, number]),
-    ];
-    if (pontos.length < 2) { setItineraryLoading(false); return; }
-
-    let cancelado = false;
-    setItineraryLoading(true);
-    const espera = setTimeout(() => {
-      fetchItinerary(pontos, itineraryMode, optimize)
-        .then(r => {
-          if (cancelado || !leafRef.current) return;
-          setItinerary(r);
-          mapa.drawItinerary(leafRef.current, itineraryLayerRef, r, isDesktop ? 40 : 300);
-        })
-        .catch(e => { if (!cancelado) fail('Não deu pra montar o roteiro', e); })
-        .finally(() => { if (!cancelado) setItineraryLoading(false); });
-    }, 700);
-
-    return () => { cancelado = true; clearTimeout(espera); };
-  }, [itineraryOpen, stopIds, itineraryMode, optimize, fromOrigin, origemRota, places]);
-
-  const debouncedSearch = useMemo(() => debounce(async (q) => {
-    if (!q.trim()) { setResults([]); return; }
-    setSearching(true);
-    try {
-      setResults(await geocodeAddress(q));
-    } catch (e) {
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, 600), []);
-
-  // Endereço novo só interessa a quem pode guardar; quem abriu por link busca
-  // dentro da lista e não precisa acordar o Nominatim.
-  useEffect(() => {
-    if (canEdit) debouncedSearch(query);
-    else setResults([]);
-  }, [query, canEdit]);
-
-  const matchPlaces = useMemo(() => {
-    const termo = semAcento(query).trim();
-    if (!termo) return [];
-    return places.filter(p => {
-      const listas = (p.list_ids || []).map(id => lists.find(l => l.id === id)?.name || '').join(' ');
-      const alvo = semAcento([p.name, p.address, p.category, semTags(p.description), listas].join(' '));
-      return termo.split(/\s+/).every(palavra => alvo.includes(palavra));
-    }).slice(0, 12);
-  }, [query, places, lists]);
-
-  // Todo alerta de erro passa por aqui: o motivo real vai junto (antes a tela
-  // só chutava "você está logado?", que escondia qualquer outra causa), e
-  // quando o problema é sessão vencida o login volta a ser oferecido.
-  const fail = (acao, e) => {
-    console.error(`[Mipas] ${acao}:`, e);
-    const semSessao = isSessionError(e);
-    alert(`${acao}.\n\nMotivo: ${errorDetail(e)}`
-      + (semSessao ? '\n\nParece que sua sessão expirou — entre de novo e tente outra vez.' : ''));
-    if (!semSessao) return;
-    auth.getSession().then(s => {
-      setSession(s);
-      if (!s) setLoginOpen(true);
-    });
+  const showMap = () => {
+    setTab('map');
+    setOpenListId(null);
+    invalidarTamanho();
   };
 
   const goToPlace = (p) => {
@@ -471,24 +133,35 @@ export default function App() {
       setOpenListId(null);
     }
     setSelId(p.id);
-    setTimeout(() => {
-      leafRef.current.invalidateSize();
-      leafRef.current.flyTo([p.latitude, p.longitude], 15, { duration: .8 });
-    }, 60);
+    voarPara(p.latitude, p.longitude, { zoom: 15, duracao: .8, atraso: 60, remedir: true });
   };
 
   const abrirLugarDaBusca = (p) => {
     revelarLugar(p);
-    setSearchOpen(false);
-    setQuery('');
-    setResults([]);
+    fecharBusca();
     goToPlace(p);
   };
 
   const backToSidebar = () => {
     setSidebarHidden(false);
     setSelId(null);
-    setTimeout(() => leafRef.current.invalidateSize(), 60);
+    invalidarTamanho();
+  };
+
+  const abrirRoteiro = () => {
+    setItineraryOpen(true);
+    setLayersOpen(false);
+    setRoutePlaceId(null);
+    setSelId(null);
+  };
+
+  const montarRoteiroDaLista = (list) => {
+    mostrarSomente(list.id, lists);
+    setStopIds([]);
+    setOpenListId(null);
+    setTab('map');
+    abrirRoteiro();
+    invalidarTamanho();
   };
 
   const savePlace = async (d) => {
@@ -520,8 +193,6 @@ export default function App() {
         }
       }
       setPlaces(ps => [...ps, comFotos]);
-      // Guardar um lugar e ele não aparecer por causa de um filtro ligado antes
-      // pareceria erro — o que acabou de ser criado sempre volta pro mapa.
       revelarLugar(comFotos);
       if (d.wish_id) {
         try {
@@ -533,14 +204,10 @@ export default function App() {
       }
       clearDraft('place');
       setDraft(null);
-      setSearchOpen(false);
-      setQuery('');
-      setResults([]);
+      fecharBusca();
       setTab('map');
       setTimeout(() => {
-        leafRef.current.flyTo([created.latitude, created.longitude], 15, { duration: .9 });
-        // No celular a lista aberta cobre o mapa inteiro: o cartão do lugar
-        // apareceria flutuando por cima dela, sem mapa nenhum atrás.
+        voarPara(created.latitude, created.longitude, { zoom: 15, duracao: .9 });
         if (isDesktop || !openListId) setSelId(created.id);
       }, 100);
     } catch (e) {
@@ -580,27 +247,10 @@ export default function App() {
     }
   };
 
-  // A cor vem do menu do botão direito, onde a graça é ver a mudança na hora:
-  // pinta primeiro, e só desfaz se o banco recusar.
-  const setListColor = async (list, color) => {
-    if (color === list.color) return;
-    const antes = list.color;
-    setLists(ls => ls.map(l => (l.id === list.id ? { ...l, color } : l)));
-    try {
-      await data.updateList(list.id, { color });
-    } catch (e) {
-      setLists(ls => ls.map(l => (l.id === list.id ? { ...l, color: antes } : l)));
-      fail('Não deu pra mudar a cor da lista', e);
-    }
-  };
-
-  // As duas visibilidades sao independentes: uma vale pro mapa do dono, a outra
-  // pro mapa de quem visita o site. Pinta primeiro e desfaz se o banco recusar.
   const toggleListHidden = async (list, campo) => {
     const valor = !list[campo];
     const antes = lists;
     setLists(ls => ls.map(l => (l.id === list.id ? { ...l, [campo]: valor } : l)));
-    // Só mexe no mapa que estou vendo agora se for o campo do meu ponto de vista.
     if (campo === (canEdit ? 'hidden_for_owner' : 'hidden_for_visitor')) {
       setHiddenListIds(ids => (valor
         ? (ids.includes(list.id) ? ids : [...ids, list.id])
@@ -614,13 +264,9 @@ export default function App() {
     }
   };
 
-  // Comandos do botão direito numa lista. Montados aqui porque quem sabe fazer
-  // as coisas é o App; o menu lá embaixo só desenha o que receber.
   const menuDaLista = (l) => [
     openListId !== l.id && { rotulo: 'Abrir lista', onClick: () => setOpenListId(l.id) },
     { rotulo: 'Editar lista…', onClick: () => setEditingList(l) },
-    // Listas antigas podem ter cor fora da paleta; sem ela na fila, nenhuma
-    // bolinha apareceria marcada e a cor atual sumiria ao trocar sem querer.
     { rotulo: 'Mudar a cor', cores: {
       atual: l.color,
       opcoes: listColors.includes(l.color) ? listColors : [l.color, ...listColors],
@@ -630,15 +276,11 @@ export default function App() {
       separadorAntes: true, onClick: () => toggleListHidden(l, 'hidden_for_owner') },
     { rotulo: l.hidden_for_visitor ? 'Mostrar no mapa dos visitantes' : 'Ocultar do mapa dos visitantes',
       onClick: () => toggleListHidden(l, 'hidden_for_visitor') },
-    { rotulo: l.ranking_enabled ? 'Desativar ranking' : 'Ativar ranking', separadorAntes: true, onClick: () => toggleRanking(l) },
-    { rotulo: l.is_public ? 'Copiar link' : 'Tornar pública e copiar link', onClick: () => shareList(l) },
+    { rotulo: l.is_public ? 'Copiar link' : 'Tornar pública e copiar link', separadorAntes: true, onClick: () => shareList(l) },
     { rotulo: 'Adicionar novo lugar…', onClick: () => novoLugarNaLista(l) },
     { rotulo: 'Excluir lista', perigo: true, separadorAntes: true, onClick: () => removeList(l) },
   ];
 
-  // Excluir a lista leva junto os lugares que só existiam nela — quem também
-  // está em outra lista continua lá. O aviso diz quantos vão sumir antes de
-  // qualquer coisa acontecer, porque isso aqui não tem desfazer.
   const removeList = async (list) => {
     const soNesta = places.filter(p => (p.list_ids || []).length === 1 && p.list_ids[0] === list.id);
     const nota = soNesta.length === 0 ? ''
@@ -664,8 +306,6 @@ export default function App() {
     }
   };
 
-  // Cadastro que começa dentro da lista: a folha abre já marcada nela e sem
-  // endereço — quem escolhe o endereço (e o pin) é a busca de dentro da folha.
   const novoLugarNaLista = (list) => {
     setDraft({
       address: '', lat: null, lng: null, name: '', category: '', rating: '',
@@ -703,23 +343,11 @@ export default function App() {
       setWishes(ws => [...ws, criado]);
       clearDraft('wish');
       setWishDraft(null);
-      setSearchOpen(false);
-      setQuery('');
-      setResults([]);
+      fecharBusca();
     } catch (e) {
       fail('Não deu pra guardar esse desejo', e);
     } finally {
       setSavingWish(false);
-    }
-  };
-
-  const removeWish = async (w) => {
-    if (!confirm(`Tirar "${w.name}" do Quero ir?`)) return;
-    try {
-      await data.deleteWish(w.id);
-      setWishes(ws => ws.filter(x => x.id !== w.id));
-    } catch (e) {
-      fail('Não deu pra tirar esse lugar do Quero ir', e);
     }
   };
 
@@ -740,128 +368,14 @@ export default function App() {
     });
   };
 
-  const removePlaceFromList = async (lugar, listId) => {
-    const restantes = (lugar.list_ids || []).filter(id => id !== listId);
-    if (restantes.length === 0) return;
-    try {
-      await data.setPlaceLists(lugar.id, restantes);
-      setPlaces(ps => ps.map(p => (p.id === lugar.id ? { ...p, list_ids: restantes } : p)));
-    } catch (e) {
-      fail('Não deu pra tirar o lugar desta lista', e);
-    }
-  };
-
-  const shareList = async (list) => {
-    try {
-      let target = list;
-      if (!list.is_public) {
-        target = await data.updateList(list.id, { is_public: true });
-        setLists(ls => ls.map(l => (l.id === target.id ? target : l)));
-      }
-      const url = `${window.location.origin}${window.location.pathname}?list=${target.id}`;
-      await navigator.clipboard.writeText(url);
-      alert('Link copiado:\n' + url);
-    } catch (e) {
-      fail('Não deu pra gerar o link', e);
-    }
-  };
-
-  const savePlaceEdits = async (placeId, patch, photoPatches, listIds) => {
-    try {
-      let updated = null;
-      if (listIds) {
-        await data.setPlaceLists(placeId, listIds);
-      }
-      if (patch && Object.keys(patch).length > 0) {
-        updated = await data.updatePlace(placeId, patch);
-      } else if (listIds) {
-        setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, list_ids: listIds } : p)));
-      }
-      const photos = await Promise.all((photoPatches || []).map(pp => data.updatePhoto(pp.id, pp.patch)));
-      setPlaces(ps => ps.map(p => {
-        if (p.id !== placeId) return p;
-        const base = updated || p;
-        if (photos.length === 0) return base;
-        return { ...base, photos: (base.photos || []).map(ph => photos.find(n => n.id === ph.id) || ph) };
-      }));
-    } catch (e) {
-      fail('Não deu pra salvar as alterações', e);
-      throw e;
-    }
-  };
-
-  const addPhoto = async (placeId, file, title) => {
-    try {
-      const photo = await data.uploadPhoto(session.user.id, placeId, file, title);
-      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: [...(p.photos || []), photo] } : p)));
-    } catch (e) {
-      fail('Não deu pra enviar a foto', e);
-    }
-  };
-
-  const reorderPhotos = async (placeId, ids) => {
-    const antes = places.find(p => p.id === placeId)?.photos || [];
-    const novas = ids.map(id => antes.find(ph => ph.id === id)).filter(Boolean);
-    setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: novas } : p)));
-    try {
-      await data.reorderPhotos(ids);
-    } catch (e) {
-      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, photos: antes } : p)));
-      fail('Não deu pra salvar a ordem das fotos', e);
-    }
-  };
-
-  const removePhoto = async (placeId, photo) => {
-    if (!confirm('Excluir essa foto?')) return;
-    try {
-      await data.deletePhoto(photo);
-      // O banco já zera o cover_photo_id nesse caso (on delete set null); aqui
-      // é só não deixar o estado local apontando pra uma foto que não existe.
-      setPlaces(ps => ps.map(p => (p.id === placeId ? {
-        ...p,
-        photos: (p.photos || []).filter(ph => ph.id !== photo.id),
-        cover_photo_id: p.cover_photo_id === photo.id ? null : p.cover_photo_id,
-      } : p)));
-    } catch (e) {
-      fail('Não deu pra excluir a foto', e);
-    }
-  };
-
-  const setCoverPhoto = async (placeId, photoId) => {
-    const antes = places.find(p => p.id === placeId)?.cover_photo_id ?? null;
-    setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, cover_photo_id: photoId } : p)));
-    try {
-      await data.updatePlace(placeId, { cover_photo_id: photoId });
-    } catch (e) {
-      setPlaces(ps => ps.map(p => (p.id === placeId ? { ...p, cover_photo_id: antes } : p)));
-      fail('Não deu pra escolher a foto do mapa', e);
-    }
-  };
-
-  const toggleRanking = async (list) => {
-    try {
-      const updated = await data.updateList(list.id, { ranking_enabled: !list.ranking_enabled });
-      setLists(ls => ls.map(l => (l.id === updated.id ? updated : l)));
-    } catch (e) {
-      fail('Não deu pra atualizar a lista', e);
-    }
-  };
-
   const saveHome = async ({ lat, lng }) => {
-    const saved = await data.saveHome(session.user.id, { latitude: lat, longitude: lng });
-    setHome(saved);
+    await gravarCasa({ lat, lng });
     setHomeOpen(false);
   };
 
   const removeHome = async () => {
-    await data.clearHome(session.user.id);
-    setHome(null);
+    await apagarCasa();
     setHomeOpen(false);
-  };
-
-  const handleAuthButtonClick = () => {
-    if (canEdit) auth.signOut();
-    else setLoginOpen(true);
   };
 
   const sel = places.find(p => p.id === selId);
@@ -869,8 +383,6 @@ export default function App() {
 
   const showLoading = loadingData && lists.length === 0 && places.length === 0;
 
-  // No celular as listas cobrem o mapa inteiro; painel flutuando por cima delas
-  // seria painel sobre o que ele nem controla.
   const mapaAparecendo = isDesktop || (tab === 'map' && !openList);
 
   return (
@@ -1058,7 +570,7 @@ export default function App() {
           onOpenList={setOpenListId}
           onNewList={() => setNewListOpen(true)}
           menuDaLista={canEdit ? menuDaLista : null}
-          onBack={() => setTab('map')}
+          onViewMap={showMap}
           seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
         />
@@ -1071,7 +583,7 @@ export default function App() {
           onNew={() => { setSearchTarget('wish'); setSearchOpen(true); }}
           onFui={marcarFui}
           onRemove={removeWish}
-          onBack={() => setTab('map')}
+          onViewMap={showMap}
           seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
         />
@@ -1093,7 +605,6 @@ export default function App() {
           onRemovePhoto={removePhoto}
           onReorderPhotos={reorderPhotos}
           onSetCover={setCoverPhoto}
-          onToggleRanking={() => toggleRanking(openList)}
           onBuildItinerary={() => montarRoteiroDaLista(openList)}
           onAddPlace={() => novoLugarNaLista(openList)}
           onDeleteList={() => removeList(openList)}
@@ -1108,7 +619,7 @@ export default function App() {
           {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => {
             const ativa = k === 'map' ? tab === 'map' : tab !== 'map';
             return (
-              <Button key={k} onClick={() => { setTab(k); setOpenListId(null); if (k === 'map') setTimeout(() => leafRef.current.invalidateSize(), 60); }} variant={ativa ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
+              <Button key={k} onClick={() => { if (k === 'map') { showMap(); return; } setTab(k); setOpenListId(null); }} variant={ativa ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
             );
           })}
         </div>
@@ -1203,15 +714,16 @@ export default function App() {
 
     {isDesktop && !sidebarHidden && (
       <div style={{ width: 'clamp(360px, 38%, 620px)', flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {canEdit && !openList && (
-          <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
+        <div style={{ padding: '14px 20px 0', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <HomeButton />
+          {canEdit && !openList && (
             <Dropdown
               valor={tab === 'wish' ? 'wish' : 'lists'}
               opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]}
               onEscolher={setTab}
             />
-          </div>
-        )}
+          )}
+        </div>
         {!openList && tab === 'wish' && canEdit ? (
           <WishPanel
             wishes={wishes}
@@ -1237,7 +749,6 @@ export default function App() {
             onRemovePhoto={removePhoto}
             onReorderPhotos={reorderPhotos}
             onSetCover={setCoverPhoto}
-            onToggleRanking={() => toggleRanking(openList)}
             onBuildItinerary={() => montarRoteiroDaLista(openList)}
             onAddPlace={() => novoLugarNaLista(openList)}
             onDeleteList={() => removeList(openList)}
