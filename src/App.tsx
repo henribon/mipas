@@ -423,7 +423,7 @@ export default function App() {
             <path d="M10.3 3.6H6.6a2.6 2.6 0 0 0 0 5.2h2.8a2.6 2.6 0 0 1 0 5.2H5.7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
           {stopIds.length > 0 && (
-            <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 99, background: C.coral, color: '#fff', fontSize: 10, fontWeight: 800, lineHeight: '16px', textAlign: 'center', padding: '0 3px' }}>{stopIds.length}</span>
+            <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 99, background: C.coral, color: C.coralText, fontSize: 10, fontWeight: 800, lineHeight: '16px', textAlign: 'center', padding: '0 3px' }}>{stopIds.length}</span>
           )}
         </Button>
       )}
@@ -439,7 +439,7 @@ export default function App() {
       )}
 
       {loadError && (
-        <div style={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 999, background: 'rgba(255,80,60,.15)', border: '1px solid rgba(255,80,60,.35)', color: '#FF6B5B', borderRadius: 12, padding: '10px 14px', fontWeight: 600, fontSize: 13 }}>{loadError}</div>
+        <div className="absolute top-4 right-4 left-4 z-[999] rounded-xl border border-danger/35 bg-danger/15 px-3.5 py-2.5 text-[13px] font-semibold text-danger">{loadError}</div>
       )}
 
       {!sharedMode && (

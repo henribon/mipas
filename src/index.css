@@ -20,10 +20,10 @@
 :root {
   --card: #F4EFE4;
   --ring: #2E2E2E;
-  --input: #D2CBBB;
+  --input: #B3AA96;
   --muted: #CFC8B8;
   --accent: #E6E4D7;
-  --border: #D2CBBB;
+  --border: #B3AA96;
   --radius: 0.5rem;
   --chart-1: #F26A4B;
   --chart-2: #1E1E1E;
@@ -40,7 +40,7 @@
   --background: #E9E4D8;
   --font-serif: "Playfair Display", serif;
   --foreground: #1E1E1E;
-  --destructive: #DC2626;
+  --destructive: #C81E1E;
   --shadow-blur: 10px;
   --shadow-color: #000000;
   --sidebar-ring: #2E2E2E;
@@ -48,12 +48,12 @@
   --letter-spacing: 0.01em;
   --shadow-opacity: 0.1;
   --sidebar-accent: #E6E4D7;
-  --sidebar-border: #D2CBBB;
+  --sidebar-border: #B3AA96;
   --card-foreground: #1E1E1E;
   --shadow-offset-x: 0px;
   --shadow-offset-y: 4px;
   --sidebar-primary: #2E2E2E;
-  --muted-foreground: #5E5A52;
+  --muted-foreground: #555149;
   --accent-foreground: #2E2E2E;
   --popover-foreground: #1E1E1E;
   --primary-foreground: #E6E4D7;
@@ -67,10 +67,10 @@
 .dark {
   --card: #1C1C1C;
   --ring: #D1CFC0;
-  --input: #2C2C2C;
+  --input: #414141;
   --muted: #2A2A2A;
   --accent: #363636;
-  --border: #2C2C2C;
+  --border: #414141;
   --radius: 0.5rem;
   --chart-1: #F26A4B;
   --chart-2: #D9CFC2;
@@ -87,7 +87,7 @@
   --background: #141414;
   --font-serif: "Playfair Display", serif;
   --foreground: #E8E3DA;
-  --destructive: #EF4444;
+  --destructive: #FF6B5B;
   --shadow-blur: 15px;
   --shadow-color: #000000;
   --sidebar-ring: #D1CFC0;
@@ -95,12 +95,12 @@
   --letter-spacing: 0.01em;
   --shadow-opacity: 0.3;
   --sidebar-accent: #363636;
-  --sidebar-border: #2C2C2C;
+  --sidebar-border: #414141;
   --card-foreground: #E8E3DA;
   --shadow-offset-x: 0px;
   --shadow-offset-y: 6px;
   --sidebar-primary: #D1CFC0;
-  --muted-foreground: #8E8A83;
+  --muted-foreground: #9A968F;
   --accent-foreground: #D1CFC0;
   --popover-foreground: #E8E3DA;
   --primary-foreground: #363636;
@@ -169,19 +169,25 @@
   --ink: var(--foreground);
   --sub: var(--muted-foreground);
   --coral: var(--primary);
-  --coral-texto: var(--primary-foreground);
+  --coral-text: var(--primary-foreground);
+  --danger: var(--destructive);
   --line: var(--border);
   --busca-brilho: var(--ring);
   --busca-halo: var(--secondary);
   --display-font: "Milker", "Inter", sans-serif;
 }
 
+/* color-scheme tells the browser which base to paint the widgets it draws
+   itself — select popups, form fields, the overscroll gutter — so they stop
+   coming out light while the app is dark. */
 :root {
+  color-scheme: light;
   --glass: #E9E4D8EB;
   --fade: linear-gradient(#E9E4D8E6, #E9E4D800);
 }
 
 .dark {
+  color-scheme: dark;
   --glass: #141414EB;
   --fade: linear-gradient(#141414E6, #14141400);
 }
@@ -194,7 +200,8 @@
   --color-ink: var(--ink);
   --color-sub: var(--sub);
   --color-coral: var(--coral);
-  --color-coral-texto: var(--coral-texto);
+  --color-coral-text: var(--coral-text);
+  --color-danger: var(--danger);
   --color-line: var(--line);
 }
 

@@ -55,10 +55,10 @@ export function LoginForm({ onCancel }: { onCancel: () => void }) {
           style={{ border: `1.5px solid ${C.line}`, background: C.paper, borderRadius: 12, padding: '11px 14px', fontSize: 15, fontWeight: 600, color: C.ink, boxSizing: 'border-box' }} />
         <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Senha"
           style={{ border: `1.5px solid ${C.line}`, background: C.paper, borderRadius: 12, padding: '11px 14px', fontSize: 15, fontWeight: 600, color: C.ink, boxSizing: 'border-box' }} />
-        {error && <div style={{ color: '#FF6B5B', fontSize: 13, fontWeight: 600 }}>{error}</div>}
+        {error && <div style={{ color: C.danger, fontSize: 13, fontWeight: 600 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button type="button" onClick={onCancel} style={{ flex: 1, border: 'none', borderRadius: 12, padding: '12px', background: C.cream, color: C.ink, fontFamily: 'Inter', fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
-          <button type="submit" disabled={loading} style={{ flex: 1, border: 'none', borderRadius: 12, padding: '12px', background: C.coral, color: '#fff', fontFamily: 'Inter', fontWeight: 700, cursor: 'pointer', opacity: loading ? .6 : 1 }}>{loading ? '...' : 'Entrar'}</button>
+          <button type="submit" disabled={loading} style={{ flex: 1, border: 'none', borderRadius: 12, padding: '12px', background: C.coral, color: C.coralText, fontFamily: 'Inter', fontWeight: 700, cursor: 'pointer', opacity: loading ? .6 : 1 }}>{loading ? '...' : 'Entrar'}</button>
         </div>
       </form>
     </div>

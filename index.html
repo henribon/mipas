@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mipas</title>
+<meta name="theme-color" content="#141414">
 <script>
 // Antes da primeira pintura: sem isto a página pisca clara até o main.tsx
 // rodar, o que fica evidente agora que o padrão é o tema escuro. O main.tsx
-// aplica o tema de novo (e também no body) logo em seguida.
+// aplica o tema de novo (e também no body) logo em seguida. Só o valor
+// 'light' tira do escuro — qualquer outra coisa cai no padrão.
 try {
-  document.documentElement.classList.toggle('dark', (localStorage.getItem('mipas-tema') || 'dark') === 'dark');
+  var claro = localStorage.getItem('mipas-tema') === 'light';
+  document.documentElement.classList.toggle('dark', !claro);
+  if (claro) document.querySelector('meta[name="theme-color"]').content = '#E9E4D8';
 } catch (e) {
   document.documentElement.classList.add('dark');
 }

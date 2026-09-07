@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { getTheme, listColors } from '@/theme';
+import { chipTextColor, getTheme, listColors } from '@/theme';
 import { haversineKm, shortAddress, debounce, geocodeAddress } from '@/geocoding';
 import { formatKm, formatMinutes } from '@/routing';
 import { ROUTE_COLORS, coverPhoto } from '@/map';
@@ -467,7 +467,7 @@ function ContextMenu({ x, y, itens, onClose }) {
               onClick={ev => { ev.stopPropagation(); onClose(); it.onClick(); }}
               onMouseEnter={ev => { realce(ev, true); setSubmenu(null); }}
               onMouseLeave={ev => realce(ev, false)}
-              style={{ ...estiloItem, color: it.perigo ? '#FF6B5B' : C.ink }}>
+              style={{ ...estiloItem, color: it.perigo ? C.danger : C.ink }}>
               {it.rotulo}
             </button>
           )}
@@ -654,18 +654,18 @@ function HomeSheet({ home, onCancel, onSave, onClear }) {
         {home && (
           <div style={{ marginTop: 14, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 600, color: C.ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Casa definida ({home.latitude.toFixed(4)}, {home.longitude.toFixed(4)})</span>
-            <Button onClick={onClear} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10 px-3 py-1.5 text-[12px] shadow-none">Remover</Button>
+            <Button onClick={onClear} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-danger hover:bg-danger/10 px-3 py-1.5 text-[12px] shadow-none">Remover</Button>
           </div>
         )}
 
-        <Button onClick={useCurrentLocation} disabled={locating || saving} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] w-full mt-3.5 !py-3.5 !text-[14.5px]">{locating ? 'Localizando…' : 'Usar minha localização atual'}</Button>
+        <Button onClick={useCurrentLocation} disabled={locating || saving} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-coral-text shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] w-full mt-3.5 !py-3.5 !text-[14.5px]">{locating ? 'Localizando…' : 'Usar minha localização atual'}</Button>
 
         <div style={{ marginTop: 16, fontWeight: 700, fontSize: 13, color: C.ink }}>Ou busque um endereço</div>
         <input autoFocus value={query} onChange={e => { setQuery(e.target.value); debouncedSearch(e.target.value); }} placeholder="Rua, praça, avenida…"
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
 
         {searching && <div style={{ textAlign: 'center', marginTop: 16, color: C.sub, fontWeight: 600, fontSize: 13 }}>Buscando…</div>}
-        {error && <div style={{ marginTop: 12, color: '#FF6B5B', fontWeight: 600, fontSize: 13 }}>{error}</div>}
+        {error && <div style={{ marginTop: 12, color: C.danger, fontWeight: 600, fontSize: 13 }}>{error}</div>}
 
         <div style={{ marginTop: 8 }}>
           {results.map((r, i) => (
@@ -758,12 +758,12 @@ function PlaceCard({ place, list, onClose, refKm, refTipo, route, routeLoading, 
         <div style={{ fontFamily: 'var(--display-font)', fontWeight: 400, fontSize: 16, letterSpacing: .5, textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 10px rgba(0,0,0,.5)', padding: '0 52px', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
           {place.name}
         </div>
-        <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.4)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.ink }}>✕</button>
+        <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 99, border: 'none', background: 'rgba(0,0,0,.4)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#fff' }}>✕</button>
       </div>
       <div style={{ padding: '14px 18px 16px' }}>
         <AddressLink place={place} fontSize={13} />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          {list && <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', background: list.color + '1E', color: list.color, borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>{list.emoji} {list.name}</div>}
+          {list && <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', background: list.color + '1E', color: chipTextColor(list.color, C.surface), borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>{list.emoji} {list.name}</div>}
           {place.category && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '5px 12px' }}>{place.category}</div>}
           {place.rating != null && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '5px 12px' }}>★ {place.rating}</div>}
           {place.avg_price != null && (
@@ -920,10 +920,10 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor,
               <div style={{ marginTop: 9, fontSize: 12.5, fontWeight: 500, color: C.sub, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{w.note}</div>
             )}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
-              <Button onClick={() => onFui(w)} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] !px-6 !py-2.5 tracking-wide">FUI!</Button>
+              <Button onClick={() => onFui(w)} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-coral-text shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] !px-6 !py-2.5 tracking-wide">FUI!</Button>
               <span style={{ fontSize: 11.5, fontWeight: 500, color: C.sub }}>vira um lugar numa lista</span>
               <div style={{ flex: 1 }} />
-              <Button onClick={() => onRemove(w)} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10 px-3 py-1.5 text-[12px] shadow-none">Excluir</Button>
+              <Button onClick={() => onRemove(w)} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-danger hover:bg-danger/10 px-3 py-1.5 text-[12px] shadow-none">Excluir</Button>
             </div>
           </WindowCard>
         ))}
@@ -1096,7 +1096,7 @@ function PhotoGallery({ photos, canEdit, edits, onEdit, onAdd, onRemove, onReord
       )}
       {podeEscolherCapa && ehCapa(ph) && (
         <div style={{
-          position: 'absolute', left: 1, right: 1, bottom: 1, background: C.coral, color: 'var(--coral-texto)',
+          position: 'absolute', left: 1, right: 1, bottom: 1, background: C.coral, color: C.coralText,
           fontSize: 9, fontWeight: 800, letterSpacing: .6, textAlign: 'center', padding: '2px 0',
           borderRadius: '0 0 9px 9px', pointerEvents: 'none',
         }}>📍 CAPA</div>
@@ -1343,13 +1343,13 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
   );
 
   const chip = (texto, cor) => (
-    <div key={texto} style={{ fontSize: 12, fontWeight: 700, color: cor || C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '4px 10px' }}>{texto}</div>
+    <div key={texto} style={{ fontSize: 12, fontWeight: 700, color: cor ? chipTextColor(cor, C.surface) : C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '4px 10px' }}>{texto}</div>
   );
 
   const tagMini = (texto, cor = null) => (
     <span key={texto} style={{
       fontSize: 9.5, fontWeight: 700, lineHeight: 1.5, letterSpacing: .2, whiteSpace: 'nowrap',
-      color: cor || C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '1px 6px',
+      color: cor ? chipTextColor(cor, C.surface) : C.sub, background: cor ? cor + '1E' : C.cream, borderRadius: 999, padding: '1px 6px',
     }}>{texto}</span>
   );
 
@@ -1476,7 +1476,7 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
 
             {canEdit && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
-                <Button onClick={save} disabled={!dirty || saving} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-white shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] disabled:opacity-45 disabled:cursor-default">{saving ? 'Salvando…' : 'Salvar'}</Button>
+                <Button onClick={save} disabled={!dirty || saving} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-coral text-coral-text shadow-md hover:opacity-85 px-5 py-2.5 text-[13px] disabled:opacity-45 disabled:cursor-default">{saving ? 'Salvando…' : 'Salvar'}</Button>
                 {dirty && !saving && (
                   <Button onClick={cancel} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-ink shadow-md hover:opacity-80 px-5 py-2.5 text-[13px]">Desfazer</Button>
                 )}
@@ -1484,7 +1484,7 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
                 {(p.list_ids || []).length > 1 && (
                   <Button onClick={() => onRemoveFromList(p)} title={`Continua nas outras ${(p.list_ids || []).length - 1} listas`} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-ink shadow-md hover:opacity-80 px-5 py-2.5 text-[13px] !text-sub">Tirar desta lista</Button>
                 )}
-                <Button onClick={() => onRemove(p.id)} title="Apaga o lugar de todas as listas" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-[#FF6B5B] hover:bg-[#FF6B5B]/10 px-3 py-1.5 text-[12px] shadow-none">Excluir</Button>
+                <Button onClick={() => onRemove(p.id)} title="Apaga o lugar de todas as listas" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-danger hover:bg-danger/10 px-3 py-1.5 text-[12px] shadow-none">Excluir</Button>
               </div>
             )}
           </React.Fragment>
@@ -1699,7 +1699,7 @@ function Chip({ ativo, onClick, children, cor = null }) {
   return (
     <button type="button" onClick={onClick} style={{
       fontSize: 12, fontWeight: 700, cursor: 'pointer', borderRadius: 999, padding: '5px 11px',
-      background: ativo ? destaque + '26' : C.cream, color: ativo ? destaque : C.sub,
+      background: ativo ? destaque + '26' : C.cream, color: ativo ? chipTextColor(destaque, C.surface, 0.15) : C.sub,
       border: `1px solid ${ativo ? destaque + '66' : 'transparent'}`, transition: 'background .12s',
     }}>{children}</button>
   );

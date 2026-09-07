@@ -75,5 +75,13 @@ caso o produto um dia cresça e precise de backend próprio de novo.
   usuário, textos da interface e documentação de produto como este arquivo.
 - Campos opcionais de um lugar (categoria, nota, descrição, valor médio,
   fotos) nunca aparecem na visualização pública quando vazios.
+- **O tema escuro é o padrão**, no celular e no desktop. O claro só entra se a
+  pessoa tiver escolhido (`mipas-tema: light` no `localStorage`).
+- As cores vivem em `src/index.css` (`:root` e `.dark`) e são espelhadas em
+  `PALETTES` no `src/theme.ts`, que é de onde saem os estilos inline. Mexeu em
+  uma, mexa na outra — se as duas divergirem a tela sai metade clara, metade
+  escura. Todo par texto/fundo tem que passar no AA (4.5:1); cores de lista
+  usadas como texto passam por `chipTextColor`, que escurece ou clareia o
+  necessário.
 - Dados privados do dono (ex: tabela `user_home`, o ponto "casa" usado pra
   ordenar por distância) nunca ganham policy de leitura pra `anon`.
