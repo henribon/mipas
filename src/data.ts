@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { config } from '@/theme';
 
-const client = createClient(config.supabaseUrl, config.supabaseAnonKey);
+// Same key supabase-js derives by default, pinned so the session can be read synchronously.
+export const AUTH_STORAGE_KEY = `sb-${new URL(config.supabaseUrl).hostname.split('.')[0]}-auth-token`;
+
+const client = createClient(config.supabaseUrl, config.supabasePublishableKey, {
+  auth: { storageKey: AUTH_STORAGE_KEY },
+});
 export { client as supabase };
 
 const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, hidden_for_visitor, created_at';
@@ -29,7 +34,7 @@ async function fetchLists() {
 async function fetchPlaces() {
   const { data, error } = await client.from('places').select(await placeCols()).order('created_at');
   if (error) throw error;
-  return attachPhotoUrls(data);
+  return withCachedPhotoUrls(data.map(shapePlace));
 }
 
 async function fetchListById(id) {
@@ -45,7 +50,7 @@ async function fetchPlacesByListId(listId) {
     .eq('place_lists.list_id', listId)
     .order('created_at');
   if (error) throw error;
-  return attachPhotoUrls(data);
+  return withCachedPhotoUrls(data.map(shapePlace));
 }
 
 async function createList({ name, emoji, color }) {
@@ -128,20 +133,68 @@ async function deletePlace(id) {
   if (error) throw error;
 }
 
-const SIGNED_URL_TTL = 60 * 60 * 8;
+// Signed URLs are reused across visits so the browser can serve the photos from its
+// cache; a reused URL still has MIN_URL_LIFETIME_MS left, like the old 8h TTL gave, and
+// points at the current project (one saved before a project move would break).
+const SIGNED_URL_TTL = 60 * 60 * 24;
+const MIN_URL_LIFETIME_MS = 8 * 60 * 60 * 1000;
+const PHOTO_URLS_KEY = 'mipas-photo-urls';
 
-async function signedUrlMap(paths) {
-  if (paths.length === 0) return {};
-  const { data, error } = await client.storage.from('place-photos').createSignedUrls(paths, SIGNED_URL_TTL);
-  if (error) {
-    console.error('[Mipas] não deu pra assinar URLs de foto:', error);
+let photoUrls: Record<string, { url: string; exp: number }> = readPhotoUrls();
+
+function readPhotoUrls() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PHOTO_URLS_KEY) || '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch {
     return {};
   }
+}
+
+function cachedPhotoUrl(path) {
+  const saved = photoUrls[path];
+  const usable = saved && saved.url.startsWith(`${config.supabaseUrl}/`) && saved.exp - Date.now() > MIN_URL_LIFETIME_MS;
+  return usable ? saved.url : null;
+}
+
+function savePhotoUrls() {
+  photoUrls = Object.fromEntries(Object.entries(photoUrls).filter(([path]) => cachedPhotoUrl(path)));
+  try {
+    localStorage.setItem(PHOTO_URLS_KEY, JSON.stringify(photoUrls));
+  } catch {
+  }
+}
+
+function clearPhotoUrlCache() {
+  photoUrls = {};
+  try {
+    localStorage.removeItem(PHOTO_URLS_KEY);
+  } catch {
+  }
+}
+
+async function signedUrlMap(paths) {
   const map = {};
+  const missing = new Set<string>();
+  paths.forEach(path => {
+    const url = cachedPhotoUrl(path);
+    if (url) map[path] = url;
+    else missing.add(path);
+  });
+  if (missing.size === 0) return map;
+  const signedAt = Date.now();
+  const { data, error } = await client.storage.from('place-photos').createSignedUrls([...missing], SIGNED_URL_TTL);
+  if (error) {
+    console.error('[Mipas] não deu pra assinar URLs de foto:', error);
+    return map;
+  }
   data.forEach(d => {
     const url = d.signedUrl || d.signedURL;
-    if (url) map[d.path] = url;
+    if (!url) return;
+    map[d.path] = url;
+    photoUrls[d.path] = { url, exp: signedAt + SIGNED_URL_TTL * 1000 };
   });
+  savePhotoUrls();
   return map;
 }
 
@@ -152,17 +205,45 @@ function byPosition(a, b) {
   return String(a.created_at).localeCompare(String(b.created_at));
 }
 
-async function attachPhotoUrls(places) {
-  const paths = [];
-  places.forEach(p => (p.place_photos || []).forEach(ph => paths.push(ph.storage_path)));
-  const urls = await signedUrlMap(paths);
-  return places.map(p => {
-    const photos = (p.place_photos || [])
-      .map(ph => ({ ...ph, url: urls[ph.storage_path] || null }))
-      .sort(byPosition);
-    const { place_photos, place_lists, ...rest } = p;
-    return { ...rest, photos, list_ids: (place_lists || []).map(v => v.list_id) };
+function shapePlace(row) {
+  const { place_photos, place_lists, ...rest } = row;
+  const photos = [...(place_photos || [])].sort(byPosition);
+  return { ...rest, photos, list_ids: (place_lists || []).map(v => v.list_id) };
+}
+
+const photoPaths = (places) => places.flatMap(p => (p.photos || []).map(ph => ph.storage_path));
+
+function withUrls(places, urls) {
+  return places.map(p => ({
+    ...p,
+    photos: (p.photos || []).map(ph => ({ ...ph, url: urls[ph.storage_path] || null })),
+  }));
+}
+
+async function attachPhotoUrls(rows) {
+  const places = rows.map(shapePlace);
+  return withUrls(places, await signedUrlMap(photoPaths(places)));
+}
+
+// Only URLs already signed; signMissingPhotoUrls fetches the rest without holding up the places.
+function withCachedPhotoUrls(places) {
+  return withUrls(places, Object.fromEntries(photoPaths(places).map(path => [path, cachedPhotoUrl(path)])));
+}
+
+async function signMissingPhotoUrls(places) {
+  const paths = places.flatMap(p => (p.photos || []).filter(ph => !ph.url).map(ph => ph.storage_path));
+  return paths.length ? signedUrlMap(paths) : null;
+}
+
+function applyPhotoUrls(places, urls) {
+  const missing = (ph) => !ph.url && urls[ph.storage_path];
+  let changed = false;
+  const out = places.map(p => {
+    if (!(p.photos || []).some(missing)) return p;
+    changed = true;
+    return { ...p, photos: p.photos.map(ph => (missing(ph) ? { ...ph, url: urls[ph.storage_path] } : ph)) };
   });
+  return changed ? out : places;
 }
 
 async function withPhotoUrls(place) {
@@ -205,7 +286,11 @@ async function uploadPhoto(ownerId, placeId, file, title) {
   const enviar = await comprimirImagem(file);
   const ext = enviar.type === 'image/jpeg' ? 'jpg' : ((file.name || '').split('.').pop() || 'jpg').toLowerCase();
   const path = `${ownerId}/${placeId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error: uploadError } = await client.storage.from('place-photos').upload(path, enviar, { contentType: enviar.type || file.type });
+  const { error: uploadError } = await client.storage.from('place-photos').upload(path, enviar, {
+    contentType: enviar.type || file.type,
+    // The path is unique and never overwritten, so the browser may keep the file for good.
+    cacheControl: String(60 * 60 * 24 * 365),
+  });
   if (uploadError) throw uploadError;
   const { data, error } = await client.from('place_photos')
     .insert({ place_id: placeId, storage_path: path, title: title || null })
@@ -302,4 +387,8 @@ export {
   createWish,
   updateWish,
   deleteWish,
+  withCachedPhotoUrls,
+  signMissingPhotoUrls,
+  applyPhotoUrls,
+  clearPhotoUrlCache,
 };

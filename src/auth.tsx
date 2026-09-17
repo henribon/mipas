@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/data';
+import { AUTH_STORAGE_KEY, supabase } from '@/data';
 import { getTheme } from '@/theme';
 
 export const auth = {
@@ -15,8 +15,17 @@ export const auth = {
     const { data } = await supabase.auth.getSession();
     return data.session;
   },
+  // What supabase-js saved on this device, possibly expired: getSession() has the final word.
+  storedSession() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null');
+      return saved?.user?.id ? saved : null;
+    } catch (e) {
+      return null;
+    }
+  },
   onChange(callback) {
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+    const { data } = supabase.auth.onAuthStateChange((event, session) => callback(event, session));
     return data.subscription;
   },
 };

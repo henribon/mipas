@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
 import { auth } from '@/auth';
+import { clearCachesOfOtherUsers, clearPrivateCaches } from '@/cache';
 import { errorDetail, isSessionError } from '@/errors';
 
 export function useSession(sharedMode: boolean) {
-  const [session, setSession] = useState(null);
+  const [session, setSession] = useState(auth.storedSession);
   const [authReady, setAuthReady] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
 
   useEffect(() => {
-    auth.getSession().then(s => { setSession(s); setAuthReady(true); });
-    const sub = auth.onChange(s => setSession(s));
+    auth.getSession().then(s => {
+      clearCachesOfOtherUsers(s?.user?.id ?? null);
+      setSession(s);
+      setAuthReady(true);
+    });
+    const sub = auth.onChange((event, s) => {
+      if (event === 'SIGNED_OUT') clearPrivateCaches();
+      setSession(s);
+    });
     return () => sub.unsubscribe();
   }, []);
 

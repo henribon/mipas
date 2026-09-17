@@ -45,6 +45,11 @@ roda inteiramente no free tier, só pro dono + amigos:
   de fotos em [`supabase/schema.sql`](supabase/schema.sql) — mudanças de
   schema entram como bloco de migração incremental idempotente no fim desse
   arquivo, pra rodar no SQL Editor do dashboard.
+- Mudar o projeto Supabase de lugar (outra região ou conta) é com
+  [`scripts/supabase-move/move.sh`](scripts/supabase-move/move.sh): dump e
+  restauração com o `pg_dump` local (sem Docker), cópia das fotos e
+  conferência. O `schema.sql` não serve pra recriar o banco do zero — as
+  migrações antigas dependem de colunas que o início do arquivo já não cria.
 - Autenticação: só o dono loga (email/senha, criado manualmente no dashboard
   do Supabase); amigos só visualizam listas marcadas como públicas via link
   (`?list=<uuid>`), sem precisar de conta.
@@ -77,3 +82,9 @@ caso o produto um dia cresça e precise de backend próprio de novo.
   fotos) nunca aparecem na visualização pública quando vazios.
 - Dados privados do dono (ex: tabela `user_home`, o ponto "casa" usado pra
   ordenar por distância) nunca ganham policy de leitura pra `anon`.
+- Pra abrir rápido (o Supabase leva de 0,3 a 5 s por requisição), o app
+  guarda no `localStorage` a última versão dos dados de cada mapa
+  ([`src/cache.ts`](src/cache.ts)) e as URLs assinadas das fotos (24 h de
+  validade, reaproveitadas enquanto sobrarem 8 h), mostra isso na hora e
+  atualiza por trás. Tudo que é do dono sai do aparelho quando a sessão
+  acaba — dado privado novo nesse cache tem que seguir a mesma regra.
