@@ -45,6 +45,11 @@ roda inteiramente no free tier, só pro dono + amigos:
   de fotos em [`supabase/schema.sql`](supabase/schema.sql) — mudanças de
   schema entram como bloco de migração incremental idempotente no fim desse
   arquivo, pra rodar no SQL Editor do dashboard.
+- Mudar o projeto Supabase de lugar (outra região ou conta) é com
+  [`scripts/supabase-move/move.sh`](scripts/supabase-move/move.sh): dump e
+  restauração com o `pg_dump` local (sem Docker), cópia das fotos e
+  conferência. O `schema.sql` não serve pra recriar o banco do zero — as
+  migrações antigas dependem de colunas que o início do arquivo já não cria.
 - Autenticação: só o dono loga (email/senha, criado manualmente no dashboard
   do Supabase); amigos só visualizam listas marcadas como públicas via link
   (`?list=<uuid>`), sem precisar de conta.
