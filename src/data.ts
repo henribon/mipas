@@ -4,7 +4,7 @@ import { config } from '@/theme';
 // Same key supabase-js derives by default, pinned so the session can be read synchronously.
 export const AUTH_STORAGE_KEY = `sb-${new URL(config.supabaseUrl).hostname.split('.')[0]}-auth-token`;
 
-const client = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+const client = createClient(config.supabaseUrl, config.supabasePublishableKey, {
   auth: { storageKey: AUTH_STORAGE_KEY },
 });
 export { client as supabase };

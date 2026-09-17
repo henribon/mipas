@@ -1,7 +1,6 @@
 export const config = {
-  supabaseUrl: 'https://altsfuxppwspqzsrhwmj.supabase.co',
-  supabaseAnonKey:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsdHNmdXhwcHdzcHF6c3Jod21qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNzU4ODYsImV4cCI6MjEwMDc1MTg4Nn0.Moh8SZ0Y22XpmCPr5PNYYvA-o3R5tlcJIIUF3iWLqIQ',
+  supabaseUrl: 'https://jutrmafktwlabkyjlfmi.supabase.co',
+  supabasePublishableKey: 'sb_publishable_BLTTdipFMb85f9BIksQAhA_nfMHR-rm',
 };
 
 export type Theme = {
