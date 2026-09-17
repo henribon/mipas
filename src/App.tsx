@@ -63,6 +63,16 @@ export default function App() {
     categories, filtrando, visiblePlaces, revelarLugar, mostrarSomente,
   } = usePlaceFilters(places);
 
+  // Set during render, so the map's first framing and pins already leave these lists out.
+  const [hiddenDefaultsLoadId, setHiddenDefaultsLoadId] = useState(0);
+  if (loadId !== hiddenDefaultsLoadId) {
+    setHiddenDefaultsLoadId(loadId);
+    if (!sharedMode) {
+      const campo = canEdit ? 'hidden_for_owner' : 'hidden_for_visitor';
+      setHiddenListIds((lists as any[]).filter(l => l[campo]).map(l => l.id));
+    }
+  }
+
   const { gps, origem, origemRota, origemPref, setOrigemPref, originOpen, setOriginOpen } = useOrigin(home);
   const { draft, setDraft, wishDraft, setWishDraft, descartarDraft, descartarWishDraft } = useDrafts(canEdit);
 
@@ -95,12 +105,6 @@ export default function App() {
     onCliqueNoMapa: () => { setSelId(null); setReturnListId(null); },
     fail,
   });
-
-  useEffect(() => {
-    if (sharedMode || loadId === 0) return;
-    const campo = canEdit ? 'hidden_for_owner' : 'hidden_for_visitor';
-    setHiddenListIds((lists as any[]).filter(l => l[campo]).map(l => l.id));
-  }, [loadId]);
 
   useEffect(() => {
     setStopIds(ids => {

@@ -7,9 +7,10 @@ import { ROUTE_COLORS, coverPhoto } from '@/map';
 import * as data from '@/data';
 import { Button } from '@/components/ui/button';
 import { AddButton } from '@/components/ui/add-button';
-import VerticalthumbsSlider from '@/components/ui/vertical-thumbnail-slider';
 import { WindowCard } from '@/components/ui/window-card';
 import { cn } from '@/lib/utils';
+
+const VerticalthumbsSlider = React.lazy(() => import('@/components/ui/vertical-thumbnail-slider'));
 
 function gradientForPlace(place, list) {
   const color = list ? list.color : '#FF5C38';
@@ -1198,7 +1199,9 @@ function PhotoLightbox({ photos, openId, onSetId, onClose }) {
   return ReactDOM.createPortal(
     <div onClick={onClose} className="fixed inset-0 z-[3000] box-border flex flex-col items-center justify-center bg-black/90 p-6" style={{ animation: 'fadeIn .15s' }}>
       <div onClick={ev => ev.stopPropagation()} className="w-full max-w-4xl">
-        <VerticalthumbsSlider fotos={photos} startIndex={idx} alturaClasse="h-[min(70vh,520px)]" />
+        <React.Suspense fallback={<div className="h-[min(70vh,520px)]" />}>
+          <VerticalthumbsSlider fotos={photos} startIndex={idx} alturaClasse="h-[min(70vh,520px)]" />
+        </React.Suspense>
 
         {(ph.title || ph.description) && (
           <div className="mx-auto mt-3.5 max-w-[620px] text-center">

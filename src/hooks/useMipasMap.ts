@@ -22,6 +22,9 @@ export function useMipasMap({
   const routeLayerRef = useRef(null);
   const itineraryLayerRef = useRef(null);
   const meLayerRef = useRef(null);
+  const enquadrouAoAbrir = useRef(false);
+  const listaEnquadrada = useRef(null);
+  const sharedPlaceShown = useRef(null);
 
   const [route, setRoute] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -43,8 +46,23 @@ export function useMipasMap({
     }, atraso);
   };
 
+  // With places already known (saved on this device), the map opens on them instead of flying there.
+  const setInitialView = (m) => {
+    if (sharedMode) {
+      const first = places[0];
+      if (!first) return false;
+      m.setView([first.latitude, first.longitude], 13);
+      sharedPlaceShown.current = first.id;
+      listaEnquadrada.current = openListId;
+      return true;
+    }
+    if (openListId || !mapa.framePlaces(m, mapa.semExtremos(visiblePlaces))) return false;
+    enquadrouAoAbrir.current = true;
+    return true;
+  };
+
   useEffect(() => {
-    const m = mapa.initMap(mapRef.current);
+    const m = mapa.initMap(mapRef.current, setInitialView);
     leafRef.current = m;
     m.on('click', onCliqueNoMapa);
     setTimeout(() => m.invalidateSize(), 300);
@@ -65,7 +83,6 @@ export function useMipasMap({
     });
   }, [visiblePlaces, lists, itineraryOpen]);
 
-  const enquadrouAoAbrir = useRef(false);
   useEffect(() => {
     const m = leafRef.current;
     if (!m || enquadrouAoAbrir.current) return;
@@ -76,7 +93,6 @@ export function useMipasMap({
     mapa.fitPlaces(m, doMiolo);
   }, [visiblePlaces, openListId]);
 
-  const listaEnquadrada = useRef(null);
   useEffect(() => {
     const m = leafRef.current;
     if (!m || !isDesktop || !openListId) {
@@ -99,6 +115,8 @@ export function useMipasMap({
     const m = leafRef.current;
     if (!m) return;
     const first = places[0];
+    if (sharedPlaceShown.current === first.id) return;
+    sharedPlaceShown.current = first.id;
     setTimeout(() => m.flyTo([first.latitude, first.longitude], 13, { duration: .6 }), 200);
   }, [sharedMode, places]);
 

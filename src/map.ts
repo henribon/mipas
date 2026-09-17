@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { haversineKm } from '@/geocoding';
 
 export function coverPhoto(place: any) {
@@ -22,9 +23,10 @@ export function buildMarkerIcon(list: any, animar = true) {
   });
 }
 
-export function initMap(container: HTMLElement) {
+// setInitialView runs before the tiles are added, so only the tiles of that view get downloaded.
+export function initMap(container: HTMLElement, setInitialView?: (map: L.Map) => boolean) {
   const map = L.map(container, { zoomControl: false, attributionControl: true });
-  map.setView([-23.561, -46.656], 12);
+  if (!setInitialView?.(map)) map.setView([-23.561, -46.656], 12);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
     maxNativeZoom: 19,
@@ -124,10 +126,12 @@ export function semExtremos(places: any[]) {
   return doMiolo.length ? doMiolo : validos;
 }
 
+const latLngsOf = (places: any[]) => (places || [])
+  .filter(p => p && p.latitude != null && p.longitude != null)
+  .map(p => [p.latitude, p.longitude] as [number, number]);
+
 export function fitPlaces(map: L.Map, places: any[], cardHeight = 60, zoomMaximo = 16) {
-  const pontos = (places || [])
-    .filter(p => p && p.latitude != null && p.longitude != null)
-    .map(p => [p.latitude, p.longitude] as [number, number]);
+  const pontos = latLngsOf(places);
   if (pontos.length === 0) return;
   const tamanho = map.getSize();
   if (!tamanho.x || !tamanho.y) {
@@ -144,6 +148,23 @@ export function fitPlaces(map: L.Map, places: any[], cardHeight = 60, zoomMaximo
     maxZoom: 16,
     duration: .7,
   });
+}
+
+// Same framing as fitPlaces, without the flight, for a map that has no view yet.
+export function framePlaces(map: L.Map, places: any[]) {
+  const points = latLngsOf(places);
+  const size = map.getSize();
+  if (points.length === 0 || !size.x || !size.y) return false;
+  if (points.length === 1) {
+    map.setView(points[0], 15);
+    return true;
+  }
+  map.fitBounds(L.latLngBounds(points), {
+    paddingTopLeft: [50, 90],
+    paddingBottomRight: [50, 60],
+    maxZoom: 16,
+  });
+  return true;
 }
 
 function buildStopIcon(numero: number, color: string) {

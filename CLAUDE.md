@@ -77,3 +77,9 @@ caso o produto um dia cresça e precise de backend próprio de novo.
   fotos) nunca aparecem na visualização pública quando vazios.
 - Dados privados do dono (ex: tabela `user_home`, o ponto "casa" usado pra
   ordenar por distância) nunca ganham policy de leitura pra `anon`.
+- Pra abrir rápido (o Supabase leva de 0,3 a 5 s por requisição), o app
+  guarda no `localStorage` a última versão dos dados de cada mapa
+  ([`src/cache.ts`](src/cache.ts)) e as URLs assinadas das fotos (24 h de
+  validade, reaproveitadas enquanto sobrarem 8 h), mostra isso na hora e
+  atualiza por trás. Tudo que é do dono sai do aparelho quando a sessão
+  acaba — dado privado novo nesse cache tem que seguir a mesma regra.
