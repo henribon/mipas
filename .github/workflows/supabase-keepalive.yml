@@ -1,0 +1,42 @@
+name: Supabase keepalive
+
+# Supabase pauses Free plan projects after a week without database activity.
+# A few read-only queries a day, made with the same public key the site ships,
+# keep the project awake. A failed run (e.g. the project already paused) makes
+# GitHub email the repository owner.
+on:
+  schedule:
+    - cron: '17 9,21 * * *' # 06:17 and 18:17 in Brasília; twice in case GitHub skips a run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: src/theme.ts
+          sparse-checkout-cone-mode: false
+
+      # URL and key come from the site's config, so moving the project with
+      # scripts/supabase-move needs no change here. Response bodies are not
+      # printed: the logs of a public repo are public, and ids of public lists
+      # are their share links.
+      - name: Query the database
+        run: |
+          url=$(sed -n "s/.*supabaseUrl: '\([^']*\)'.*/\1/p" src/theme.ts)
+          key=$(sed -n "s/.*supabasePublishableKey: '\([^']*\)'.*/\1/p" src/theme.ts)
+          if [ -z "$url" ] || [ -z "$key" ]; then
+            echo "::error::Supabase URL or key not found in src/theme.ts"
+            exit 1
+          fi
+          for table in lists places place_photos; do
+            curl -sS --fail --retry 3 --retry-all-errors --max-time 30 -o /dev/null \
+              -H "apikey: $key" \
+              -w "$table: HTTP %{http_code} in %{time_total}s\n" \
+              "$url/rest/v1/$table?select=id&limit=1"
+          done

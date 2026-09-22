@@ -34,7 +34,8 @@ roda inteiramente no free tier, só pro dono + amigos:
 
 - **Código-fonte** em [`/src`](src/), compilado pelo **Vite** para
   [`/docs`](docs/), que é o que o **GitHub Pages** publica da branch `main`
-  (Settings → Pages → Folder `/docs`). Sem GitHub Actions: build local e push.
+  (Settings → Pages → Folder `/docs`). O build não roda no GitHub Actions:
+  build local e push.
 - **`/docs` é saída de build** — o `vite build` apaga a pasta inteira a cada
   execução. Nunca guardar nada lá dentro que não seja gerado.
 - **React 18 + TypeScript + Tailwind v4**, com estrutura shadcn
@@ -50,6 +51,12 @@ roda inteiramente no free tier, só pro dono + amigos:
   restauração com o `pg_dump` local (sem Docker), cópia das fotos e
   conferência. O `schema.sql` não serve pra recriar o banco do zero — as
   migrações antigas dependem de colunas que o início do arquivo já não cria.
+- O free tier do Supabase pausa o projeto depois de 7 dias sem uso do banco.
+  O workflow [`supabase-keepalive`](.github/workflows/supabase-keepalive.yml)
+  (único do repositório) faz leituras com a chave pública 2× por dia, lendo
+  URL e chave de `src/theme.ts`. Em repositório público o GitHub desliga
+  workflows agendados após 60 dias sem commit (manda email antes); aí é
+  reativar na aba Actions.
 - Autenticação: só o dono loga (email/senha, criado manualmente no dashboard
   do Supabase); amigos só visualizam listas marcadas como públicas via link
   (`?list=<uuid>`), sem precisar de conta.
