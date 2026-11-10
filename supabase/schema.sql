@@ -751,3 +751,87 @@ alter table public.lists add column if not exists hidden_for_visitor boolean not
 grant select (hidden_for_visitor) on public.lists to anon;
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- Migração 2026-11-10 — ícone de traço nas listas
+--
+-- A lista deixa de ser representada por emoji e passa a ter um ícone de
+-- traço (nome de um ícone do Lucide, ex: 'beer', escolhido numa grade fixa no
+-- app). Sem ícone, o app mostra a inicial do nome da lista. A coluna emoji
+-- fica no banco, só não é mais lida nem escrita.
+--
+-- ATENÇÃO: rodar antes de publicar o site novo — ele pede a coluna "icon" na
+-- leitura pública e grava nela ao criar lista.
+-- Idempotente: pode rodar de novo sem erro.
+-- ---------------------------------------------------------
+
+alter table public.lists add column if not exists icon text;
+
+grant select (icon) on public.lists to anon;
+
+-- Traduz os emojis mais comuns pro ícone equivalente, só onde ainda não há
+-- ícone. O chr(65039) é o seletor de variação que alguns teclados põem depois
+-- do emoji. O que não casar fica nulo (inicial do nome) até alguém escolher.
+update public.lists set icon = case replace(emoji, chr(65039), '')
+    when '📍' then 'map-pin'
+    when '⭐' then 'star'      when '🌟' then 'star'
+    when '❤' then 'heart'     when '💖' then 'heart'    when '💜' then 'heart'
+    when '🔖' then 'bookmark'
+    when '🚩' then 'flag'
+    when '✨' then 'sparkles'
+    when '🏠' then 'house'     when '🏡' then 'house'
+    when '🧭' then 'compass'
+    when '🍽' then 'utensils'  when '🍴' then 'utensils'
+    when '🍕' then 'pizza'
+    when '🍔' then 'sandwich'  when '🌭' then 'sandwich' when '🥪' then 'sandwich'
+    when '🍜' then 'soup'      when '🍲' then 'soup'
+    when '🥗' then 'salad'
+    when '🥩' then 'beef'      when '🍖' then 'beef'
+    when '🐟' then 'fish'      when '🍣' then 'fish'     when '🍤' then 'fish'
+    when '🍗' then 'drumstick'
+    when '🥐' then 'croissant' when '🥖' then 'croissant' when '🍞' then 'croissant'
+    when '🍰' then 'cake-slice' when '🎂' then 'cake-slice' when '🧁' then 'cake-slice' when '🍩' then 'cake-slice'
+    when '🍦' then 'ice-cream-cone' when '🍨' then 'ice-cream-cone'
+    when '🍳' then 'egg-fried' when '🥞' then 'egg-fried'
+    when '☕' then 'coffee'
+    when '🥤' then 'cup-soda'  when '🧃' then 'cup-soda'
+    when '🍺' then 'beer'      when '🍻' then 'beer'
+    when '🍷' then 'wine'      when '🥂' then 'wine'
+    when '🍸' then 'martini'   when '🍹' then 'martini'
+    when '🎵' then 'music'     when '🎶' then 'music'    when '🎸' then 'music'
+    when '🎉' then 'party-popper' when '🥳' then 'party-popper' when '🎊' then 'party-popper'
+    when '🎤' then 'mic-vocal'
+    when '💿' then 'disc-3'    when '🪩' then 'disc-3'
+    when '🎭' then 'drama'
+    when '🎬' then 'clapperboard' when '🍿' then 'clapperboard'
+    when '🎟' then 'tickets'   when '🎫' then 'tickets'
+    when '🏛' then 'landmark'
+    when '🏰' then 'castle'
+    when '⛪' then 'church'
+    when '📚' then 'book-open' when '📖' then 'book-open'
+    when '🎨' then 'palette'   when '🖼' then 'palette'
+    when '📷' then 'camera'    when '📸' then 'camera'
+    when '🛍' then 'shopping-bag'
+    when '🏨' then 'bed'       when '🛏' then 'bed'
+    when '🌳' then 'trees'     when '🌲' then 'trees'
+    when '🌴' then 'tree-palm' when '🏝' then 'tree-palm' when '🏖' then 'tree-palm' when '🩴' then 'tree-palm'
+    when '⛰' then 'mountain'  when '🏔' then 'mountain'
+    when '🌊' then 'waves'
+    when '⛺' then 'tent'      when '🏕' then 'tent'
+    when '✈' then 'plane'     when '🧳' then 'plane'
+    when '🚲' then 'bike'
+    when '🐶' then 'paw-print' when '🐕' then 'paw-print' when '🐱' then 'paw-print'
+    when '🛒' then 'shopping-basket' when '🧺' then 'shopping-basket'
+    when '🏪' then 'store'     when '🏬' then 'store'
+    when '☀' then 'sun'
+    when '🚗' then 'car'
+    when '🎾' then 'trophy'    when '⚽' then 'trophy'   when '🏀' then 'trophy'
+    when '🏆' then 'trophy'    when '🏅' then 'trophy'   when '🏓' then 'trophy'   when '🏸' then 'trophy'
+    when '🏐' then 'volleyball'
+    when '🏋' then 'dumbbell'  when '💪' then 'dumbbell'
+    when '👶' then 'baby'
+  end
+where icon is null;
+
+notify pgrst, 'reload schema';
