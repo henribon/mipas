@@ -58,7 +58,7 @@ export default function App() {
   const {
     layersOpen, setLayersOpen,
     hiddenListIds, setHiddenListIds,
-    pickedCategories, setPickedCategories,
+    pickedCategory, setPickedCategory,
     minRating, setMinRating,
     categories, filtrando, visiblePlaces, revelarLugar, mostrarSomente,
   } = usePlaceFilters(places);
@@ -657,13 +657,13 @@ export default function App() {
           onToggleList={id => setHiddenListIds(ids => (ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]))}
           onSetHidden={setHiddenListIds}
           categories={categories}
-          pickedCategories={pickedCategories}
-          onToggleCategory={c => setPickedCategories(cs => (cs.includes(c) ? cs.filter(x => x !== c) : [...cs, c]))}
+          pickedCategory={pickedCategory}
+          onPickCategory={setPickedCategory}
           minRating={minRating}
           onMinRating={setMinRating}
           visibleCount={visiblePlaces.length}
           filtrando={filtrando}
-          onReset={() => { setHiddenListIds([]); setPickedCategories([]); setMinRating(null); }}
+          onReset={() => { setHiddenListIds([]); setPickedCategory(null); setMinRating(null); }}
           onClose={() => setLayersOpen(false)}
           isDesktop={isDesktop}
         />

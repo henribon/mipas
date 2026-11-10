@@ -8,6 +8,7 @@ import * as data from '@/data';
 import { Button } from '@/components/ui/button';
 import { AddButton } from '@/components/ui/add-button';
 import { WindowCard } from '@/components/ui/window-card';
+import { ListIcon, ListGlyph, LIST_ICONS, inkOn } from '@/components/list-icon';
 import { cn } from '@/lib/utils';
 
 const VerticalthumbsSlider = React.lazy(() => import('@/components/ui/vertical-thumbnail-slider'));
@@ -292,7 +293,7 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inli
             const l = lists.find(x => x.id === id);
             if (!l) return null;
             return (
-              <Button key={id} onClick={() => onAlternar(id)} title="Tirar desta lista" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none px-2.5 py-1 text-[12px] shadow-none">{l.emoji} {l.name} <span style={{ opacity: .7 }}>✕</span></Button>
+              <Button key={id} onClick={() => onAlternar(id)} title="Tirar desta lista" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none px-2.5 py-1 text-[12px] shadow-none"><ListIcon list={l} size={16} radius={5} /> {l.name} <span style={{ opacity: .7 }}>✕</span></Button>
             );
           })}
         </div>
@@ -315,7 +316,7 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inli
               borderBottom: `1px solid ${C.line}`, background: marcada ? l.color + '14' : 'transparent',
             }}>
               <input type="checkbox" checked={marcada} onChange={() => onAlternar(l.id)} style={{ accentColor: C.coral, width: 15, height: 15, cursor: 'pointer' }} />
-              <span style={{ fontSize: 15 }}>{l.emoji}</span>
+              <ListIcon list={l} size={20} radius={6} />
               <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 13.5, color: C.ink }}>{l.name}</span>
             </label>
           );
@@ -560,25 +561,21 @@ function ListSheet({ list = null, onCancel, onCreate, creating }) {
   const C = getTheme();
   const editando = !!list;
   const [name, setName] = useState(list ? list.name : '');
-  const [emoji, setEmoji] = useState(list ? list.emoji : '📍');
+  // A list from before the icons may have none: it keeps showing its initial until one is picked.
+  const [icon, setIcon] = useState(list ? (list.icon || null) : 'map-pin');
   const [color, setColor] = useState(list ? list.color : listColors[0]);
+  const corDoIcone = inkOn(color);
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 900 }}>
       <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
-      <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
+      <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: 'calc(100% - 48px)', overflowY: 'auto', boxSizing: 'border-box', background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 14, background: color + '22', border: `1px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{emoji || '?'}</div>
+          <ListIcon list={{ name, icon, color }} size={48} radius={14} />
           <div style={{ fontFamily: 'var(--display-font)', fontSize: 19, fontWeight: 400, color: C.ink }}>{editando ? 'Editar lista' : 'Nova lista'}</div>
         </div>
         <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder='Ex: "Sorveterias pra testar"'
           style={{ width: '100%', boxSizing: 'border-box', marginTop: 14, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
-        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Emoji</div>
-        <input value={emoji} onChange={e => setEmoji(e.target.value)} placeholder="📍"
-          style={{ width: 80, boxSizing: 'border-box', marginTop: 7, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '10px 14px', fontSize: 20, textAlign: 'center', color: C.ink }} />
-        <div style={{ color: C.sub, fontWeight: 500, fontSize: 12, marginTop: 6 }}>
-          Cole ou digite qualquer emoji do teclado do seu sistema (no Windows: tecla Win + ponto).
-        </div>
         <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Cor</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
           {listColors.map(c => (
@@ -588,9 +585,27 @@ function ListSheet({ list = null, onCancel, onCreate, creating }) {
             }} />
           ))}
         </div>
+        <div style={{ marginTop: 14, fontWeight: 700, fontSize: 13, color: C.ink }}>Ícone</div>
+        <div role="radiogroup" aria-label="Ícone da lista" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gap: 6, marginTop: 8 }}>
+          {LIST_ICONS.map(([chave, Icone, rotulo]) => {
+            const escolhido = icon === chave;
+            return (
+              <button key={chave} type="button" role="radio" aria-checked={escolhido} aria-label={rotulo} title={rotulo}
+                onClick={() => setIcon(chave)} style={{
+                  height: 36, borderRadius: 10, cursor: 'pointer', padding: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: escolhido ? color : C.surface,
+                  border: `1.5px solid ${escolhido ? color : C.line}`,
+                  color: escolhido ? corDoIcone : C.ink,
+                }}>
+                <Icone size={18} strokeWidth={2} aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
-          <Btn primary disabled={!name.trim() || !emoji.trim() || creating} onClick={() => name.trim() && onCreate({ name: name.trim(), emoji: emoji.trim(), color })} style={{ flex: 2 }}>
+          <Btn primary disabled={!name.trim() || creating} onClick={() => name.trim() && onCreate({ name: name.trim(), icon, color })} style={{ flex: 2 }}>
             {creating ? (editando ? 'Salvando…' : 'Criando…') : (editando ? 'Salvar' : 'Criar lista')}
           </Btn>
         </div>
@@ -764,7 +779,7 @@ function PlaceCard({ place, list, onClose, refKm, refTipo, route, routeLoading, 
       <div style={{ padding: '14px 18px 16px' }}>
         <AddressLink place={place} fontSize={13} />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          {list && <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', background: list.color + '1E', color: list.color, borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>{list.emoji} {list.name}</div>}
+          {list && <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', background: list.color + '1E', color: list.color, borderRadius: 999, padding: '5px 12px 5px 6px', fontSize: 12.5, fontWeight: 700 }}><ListIcon list={list} size={18} radius={99} /> {list.name}</div>}
           {place.category && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.sub, background: C.cream, borderRadius: 999, padding: '5px 12px' }}>{place.category}</div>}
           {place.rating != null && <div style={{ fontSize: 12.5, fontWeight: 700, color: C.coral, background: C.coral + '1E', borderRadius: 999, padding: '5px 12px' }}>★ {place.rating}</div>}
           {place.avg_price != null && (
@@ -955,7 +970,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, 
           return (
             <WindowCard key={l.id} onClick={() => onOpenList(l.id)} bodyClassName="flex items-center gap-3.5 p-4"
               onContextMenu={menuDaLista ? abrirMenu(l.id) : undefined}>
-              <div style={{ width: 48, height: 48, borderRadius: 14, background: l.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>{l.emoji}</div>
+              <ListIcon list={l} size={48} radius={14} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
                 <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
@@ -970,7 +985,6 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, 
                   </div>
                 )}
               </div>
-              <div style={{ width: 10, height: 10, borderRadius: 99, background: l.color }} />
             </WindowCard>
           );
         })}
@@ -1246,7 +1260,7 @@ function PlaceThumb({ place, list, onClick }) {
       {capa
         ? <img src={capa.url} alt={capa.title || place.name} loading="lazy"
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-        : <span style={{ fontSize: 34, opacity: .8 }}>{(list && list.emoji) || '📍'}</span>}
+        : <span style={{ opacity: .8, display: 'flex' }}><ListGlyph list={list} size={34} color={list ? list.color : C.sub} strokeWidth={1.75} /></span>}
       {nFotos > 1 && (
         <span style={{
           position: 'absolute', right: 6, bottom: 6, borderRadius: 999, padding: '1px 7px',
@@ -1399,7 +1413,7 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
             {p.category && tagMini(p.category)}
             {p.avg_price != null && tagMini(`R$ ${Number(p.avg_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
             {p.distanceKm != null && tagMini(p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`)}
-            {outrasListas.map(outra => tagMini(`${outra.emoji} ${outra.name}`, outra.color))}
+            {outrasListas.map(outra => tagMini(outra.name, outra.color))}
             {semNadaNoRodape && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.sub }}>sem nota ainda</span>}
           </div>
         </div>
@@ -1575,7 +1589,7 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
       <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Listas</Button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
         onContextMenu={menuDaLista ? abrirMenu(list.id) : undefined}>
-        <div style={{ width: 52, height: 52, borderRadius: 16, background: list.color + '22', border: `1px solid ${list.color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{list.emoji}</div>
+        <ListIcon list={list} size={52} radius={16} />
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--display-font)', fontSize: 21, fontWeight: 400, color: C.ink, lineHeight: 1.15 }}>{list.name}</div>
           <div style={{ color: C.sub, fontWeight: 500, fontSize: 13 }}>{places.length} {places.length === 1 ? 'lugar' : 'lugares'}</div>
@@ -1787,8 +1801,8 @@ function OriginPanel({
 const NOTAS_MINIMAS = [6, 7, 8, 9];
 
 function MapLayersPanel({
-  lists, places, hiddenListIds, onToggleList, onSetHidden, categories, pickedCategories,
-  onToggleCategory, minRating, onMinRating, visibleCount, onReset, onClose, isDesktop, filtrando,
+  lists, places, hiddenListIds, onToggleList, onSetHidden, categories, pickedCategory,
+  onPickCategory, minRating, onMinRating, visibleCount, onReset, onClose, isDesktop, filtrando,
 }) {
   const C = getTheme();
   const temNotas = places.some(p => p.rating != null);
@@ -1819,7 +1833,7 @@ function MapLayersPanel({
               }}>
                 <input type="checkbox" checked={visivel} onChange={() => onToggleList(l.id)}
                   style={{ accentColor: l.color, width: 15, height: 15, cursor: 'pointer' }} />
-                <span style={{ fontSize: 15 }}>{l.emoji}</span>
+                <ListIcon list={l} size={20} radius={6} />
                 <span style={{ flex: 1, minWidth: 0, fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: C.sub }}>{quantos}</span>
               </label>
@@ -1834,12 +1848,15 @@ function MapLayersPanel({
 
         {categories.length > 0 && (
           <React.Fragment>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: C.sub, margin: '14px 0 7px' }}>Categoria</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {categories.map(c => (
-                <Chip key={c} ativo={pickedCategories.includes(c)} onClick={() => onToggleCategory(c)}>{c}</Chip>
-              ))}
-            </div>
+            <label htmlFor="camadas-categoria" style={{ display: 'block', fontSize: 11, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: C.sub, margin: '14px 0 7px' }}>Categoria</label>
+            <select id="camadas-categoria" value={pickedCategory ?? ''} onChange={e => onPickCategory(e.target.value || null)} style={{
+              width: '100%', boxSizing: 'border-box', borderRadius: 10, padding: '8px 10px', cursor: 'pointer',
+              border: `1.5px solid ${pickedCategory != null ? C.coral : C.line}`, background: C.surface,
+              fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: pickedCategory != null ? C.ink : C.sub,
+            }}>
+              <option value="">Todas as categorias</option>
+              {categories.map(c => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
+            </select>
           </React.Fragment>
         )}
 
@@ -2020,7 +2037,7 @@ function ItineraryPanel({
                     display: 'flex', alignItems: 'center', gap: 9, padding: '7px 8px', borderRadius: 10,
                     background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
                   }}>
-                    <span style={{ fontSize: 15, flexShrink: 0 }}>{lista ? lista.emoji : '📍'}</span>
+                    <ListIcon list={lista} size={20} radius={6} />
                     <span style={{ flex: 1, minWidth: 0, fontFamily: 'Inter', fontWeight: 700, fontSize: 13, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                     <span style={{ fontSize: 15, fontWeight: 700, color: C.coral, flexShrink: 0 }}>＋</span>
                   </button>
@@ -2044,10 +2061,7 @@ function PlaceHit({ place, lists, onClick }) {
   const doLugar = (place.list_ids || []).map(id => lists.find(l => l.id === id)).filter(Boolean);
   return (
     <div onClick={onClick} className="flex cursor-pointer items-center gap-3 rounded-lg border-b border-line px-2 py-3 last:border-b-0 hover:bg-cream">
-      <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px]"
-        style={{ background: (doLugar[0] ? doLugar[0].color : C.coral) + '22', fontSize: 17 }}>
-        {doLugar[0] ? doLugar[0].emoji : '📍'}
-      </div>
+      <ListIcon list={doLugar[0]} size={34} radius={10} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="truncate text-[14px] font-bold text-ink">{place.name}</div>
         <div className="truncate text-[12px] font-medium text-sub">

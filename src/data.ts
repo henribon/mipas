@@ -9,7 +9,7 @@ const client = createClient(config.supabaseUrl, config.supabasePublishableKey, {
 });
 export { client as supabase };
 
-const LIST_PUBLIC_COLS = 'id, name, emoji, color, is_public, hidden_for_visitor, created_at';
+const LIST_PUBLIC_COLS = 'id, name, icon, color, is_public, hidden_for_visitor, created_at';
 const PHOTO_PUBLIC_COLS = 'id, place_id, storage_path, title, description, position, created_at';
 const FOTOS_DO_LUGAR = 'place_photos!place_photos_place_id_fkey';
 const PLACE_PUBLIC_COLS = 'id, name, address, latitude, longitude, category, '
@@ -53,8 +53,8 @@ async function fetchPlacesByListId(listId) {
   return withCachedPhotoUrls(data.map(shapePlace));
 }
 
-async function createList({ name, emoji, color }) {
-  const { data, error } = await client.from('lists').insert({ name, emoji, color }).select().single();
+async function createList({ name, icon, color }) {
+  const { data, error } = await client.from('lists').insert({ name, icon, color }).select().single();
   if (error) throw error;
   return data;
 }
