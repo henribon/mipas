@@ -50,7 +50,7 @@ export default function App() {
   const {
     lists, setLists, places, setPlaces, home, wishes, setWishes,
     loadingData, loadError, loadId,
-    setListColor, removePlaceFromList, shareList, savePlaceEdits,
+    setListColor, removePlaceFromList, shareList, sharePlace, unsharePlace, savePlaceEdits,
     addPhoto, reorderPhotos, removePhoto, setCoverPhoto, removeWish,
     saveHome: gravarCasa, removeHome: apagarCasa,
   } = useMipasData({ sharedMode, sharedListId, authReady, session, canEdit, fail });
@@ -604,6 +604,8 @@ export default function App() {
           onRemove={removePlace}
           onRemoveFromList={removePlaceFromList}
           onShare={() => shareList(openList)}
+          onSharePlace={sharePlace}
+          onUnsharePlace={canEdit ? unsharePlace : null}
           onSavePlace={savePlaceEdits}
           onAddPhoto={addPhoto}
           onRemovePhoto={removePhoto}
@@ -696,6 +698,7 @@ export default function App() {
 
       {sel && (isDesktop || tab === 'map') && !draft && !itineraryOpen && (
         <PlaceCard place={sel} list={lists.find(l => (sel.list_ids || []).includes(l.id))}
+          onShare={sharePlace}
           refKm={origem ? haversineKm(origem.latitude, origem.longitude, sel.latitude, sel.longitude) : null}
           refTipo={origem ? origem.tipo : null}
           route={route}
@@ -748,6 +751,8 @@ export default function App() {
             onRemove={removePlace}
             onRemoveFromList={removePlaceFromList}
             onShare={() => shareList(openList)}
+            onSharePlace={sharePlace}
+            onUnsharePlace={canEdit ? unsharePlace : null}
             onSavePlace={savePlaceEdits}
             onAddPhoto={addPhoto}
             onRemovePhoto={removePhoto}

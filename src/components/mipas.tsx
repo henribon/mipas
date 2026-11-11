@@ -10,6 +10,8 @@ import { AddButton } from '@/components/ui/add-button';
 import { WindowCard } from '@/components/ui/window-card';
 import { ListIcon, ListGlyph, LIST_ICONS, inkOn } from '@/components/list-icon';
 import { cn } from '@/lib/utils';
+import { instagramHandle, instagramUrl } from '@/share';
+import { Share } from 'lucide-react';
 
 const VerticalthumbsSlider = React.lazy(() => import('@/components/ui/vertical-thumbnail-slider'));
 
@@ -81,7 +83,7 @@ export const sanitizeRichHtml = function (html) {
   return root.innerHTML;
 };
 
-function RichText({ html, style }) {
+export function RichText({ html, style }) {
   const temTag = /<[a-z][\s\S]*>/i.test(html || '');
   if (!temTag) return <div style={{ whiteSpace: 'pre-wrap', ...style }}>{html}</div>;
   return <div style={style} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }} />;
@@ -714,7 +716,7 @@ function AddressLink({ place, fontSize }) {
 
 function InstagramButton({ handle, compacto = false }) {
   const C = getTheme();
-  const url = /^https?:\/\//i.test(handle) ? handle : 'https://instagram.com/' + handle.replace(/^@/, '');
+  const url = instagramUrl(handle);
   if (compacto) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
@@ -722,7 +724,7 @@ function InstagramButton({ handle, compacto = false }) {
         style={{ color: C.sub, fontWeight: 600, fontSize: 11.5, textDecoration: 'none' }}
         onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
         onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}>
-        @{String(handle).replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/\/$/, '')}
+        @{instagramHandle(handle)}
       </a>
     );
   }
@@ -764,7 +766,7 @@ function RouteLegend({ route, C }) {
   );
 }
 
-function PlaceCard({ place, list, onClose, refKm, refTipo, route, routeLoading, routeOpen, onToggleRoute }) {
+function PlaceCard({ place, list, onClose, onShare, refKm, refTipo, route, routeLoading, routeOpen, onToggleRoute }) {
   const C = getTheme();
   const [openId, setOpenId] = useState(null);
   const photos = place.photos || [];
@@ -808,6 +810,12 @@ function PlaceCard({ place, list, onClose, refKm, refTipo, route, routeLoading, 
                 <circle cx="12" cy="13" r="3.6" stroke="currentColor" strokeWidth="1.9" />
               </svg>
               FOTOS{photos.length > 1 ? ` (${photos.length})` : ''}
+            </Button>
+          )}
+          {onShare && (
+            <Button onClick={() => onShare(place)} title="Mandar o card deste lugar pra alguém" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px]">
+              <Share size={13} strokeWidth={2.1} />
+              COMPARTILHAR
             </Button>
           )}
         </div>
@@ -1271,7 +1279,7 @@ function PlaceThumb({ place, list, onClick }) {
   );
 }
 
-function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, onOpenMap, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover }) {
+function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, onOpenMap, onShare, onUnshare, onRemove, onRemoveFromList, onSave, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover }) {
   const C = getTheme();
 
   const fromPlace = () => ({
@@ -1445,6 +1453,11 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
                 {nFotos} {nFotos === 1 ? 'foto' : 'fotos'}
               </span>
             )}
+            {onShare && (
+              <Button onClick={ev => { ev.stopPropagation(); onShare(p); }} title="Mandar o card deste lugar pra alguém" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-2.5 py-1 text-[10.5px] shrink-0">
+                <Share size={11} strokeWidth={2.2} />
+              </Button>
+            )}
             <Button onClick={ev => { ev.stopPropagation(); onOpenMap(p); }} title="Ver no mapa" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-2.5 py-1 text-[10.5px] shrink-0">
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
                 <path d="M8 14.5S13 9 13 5.6A5 5 0 0 0 3 5.6C3 9 8 14.5 8 14.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
@@ -1498,6 +1511,9 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
                   <Button onClick={cancel} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-ink shadow-md hover:opacity-80 px-5 py-2.5 text-[13px]">Desfazer</Button>
                 )}
                 <div style={{ flex: 1 }} />
+                {p.is_shared && onUnshare && (
+                  <Button onClick={() => onUnshare(p)} title="Fecha o link do card deste lugar" className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-ink shadow-md hover:opacity-80 px-5 py-2.5 text-[13px] !text-sub">Parar de compartilhar</Button>
+                )}
                 {(p.list_ids || []).length > 1 && (
                   <Button onClick={() => onRemoveFromList(p)} title={`Continua nas outras ${(p.list_ids || []).length - 1} listas`} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-cream text-ink shadow-md hover:opacity-80 px-5 py-2.5 text-[13px] !text-sub">Tirar desta lista</Button>
                 )}
@@ -1515,7 +1531,7 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
   );
 }
 
-function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant }) {
+function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSharePlace, onUnsharePlace, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [menu, abrirMenu, fecharMenu] = useContextMenu();
@@ -1639,6 +1655,8 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
                 expanded={expandedId === p.id}
                 onToggle={() => setExpandedId(id => (id === p.id ? null : p.id))}
                 onOpenMap={onOpen}
+                onShare={onSharePlace}
+                onUnshare={onUnsharePlace}
                 onRemove={onRemove}
                 onRemoveFromList={lugar => onRemoveFromList(lugar, list.id)}
                 onSave={onSavePlace}

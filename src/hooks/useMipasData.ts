@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as data from '@/data';
 import { errorDetail } from '@/errors';
 import { readSnapshot, snapshotKey, writeSnapshot } from '@/cache';
+import { placeShareUrl, shareOrCopy } from '@/share';
 
 const REFRESH_AFTER_MS = 30 * 60 * 1000;
 const REFRESH_CHECK_MS = 5 * 60 * 1000;
@@ -204,6 +205,48 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
     }
   };
 
+  // The owner's share also opens the place to anyone with the link; a visitor's only
+  // passes on a link that already opens, since the place is in a public list.
+  // The write and the share sheet start together: Safari opens the sheet only straight
+  // from the click, and picking a contact takes longer than the write.
+  const sharePlace = async (place) => {
+    const url = placeShareUrl(place.id);
+    const opening = canEdit && !place.is_shared
+      ? data.setPlaceShared(place.id, true).then(() => {
+          setPlaces(ps => ps.map(p => (p.id === place.id ? { ...p, is_shared: true } : p)));
+          return null;
+        }, e => e)
+      : Promise.resolve(null);
+    let outcome = null;
+    try {
+      outcome = await shareOrCopy({ title: place.name, text: place.name, url });
+    } catch (e) {
+      console.error('[Mipas] não deu pra copiar o link:', e);
+    }
+    const openError = await opening;
+    if (openError) {
+      fail('Não deu pra liberar o link desse lugar — quem receber não vai conseguir abrir', openError);
+      return;
+    }
+    if (outcome === 'copied') alert('Link do card copiado:\n' + url);
+    else if (!outcome) prompt('Copie o link do card:', url);
+  };
+
+  const unsharePlace = async (place) => {
+    const inPublicList = lists.some(l => l.is_public && (place.list_ids || []).includes(l.id));
+    const aviso = inPublicList
+      ? 'Ele continua abrindo pelo link enquanto estiver numa lista pública.'
+      : 'Quem tiver o link do card não vai mais conseguir abrir.';
+    if (!confirm(`Parar de compartilhar "${place.name}"?\n\n${aviso}`)) return;
+    setPlaces(ps => ps.map(p => (p.id === place.id ? { ...p, is_shared: false } : p)));
+    try {
+      await data.setPlaceShared(place.id, false);
+    } catch (e) {
+      setPlaces(ps => ps.map(p => (p.id === place.id ? { ...p, is_shared: true } : p)));
+      fail('Não deu pra parar de compartilhar esse lugar', e);
+    }
+  };
+
   const savePlaceEdits = async (placeId, patch, photoPatches, listIds) => {
     try {
       let updated = null;
@@ -299,7 +342,7 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
     places, setPlaces,
     home, wishes, setWishes,
     loadingData, loadError, loadId,
-    setListColor, removePlaceFromList, shareList, savePlaceEdits,
+    setListColor, removePlaceFromList, shareList, sharePlace, unsharePlace, savePlaceEdits,
     addPhoto, reorderPhotos, removePhoto, setCoverPhoto,
     removeWish, saveHome, removeHome,
   };

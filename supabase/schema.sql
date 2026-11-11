@@ -835,3 +835,57 @@ update public.lists set icon = case replace(emoji, chr(65039), '')
 where icon is null;
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- Migração 2026-11-11 — card de compartilhamento de um lugar
+--
+-- O dono pode mandar UM lugar por link (?place=<uuid>), que abre um card com
+-- fotos, mapa e Instagram. Pra isso o lugar precisa ser legível por anon
+-- mesmo quando só está em listas privadas: is_shared marca os lugares que o
+-- dono compartilhou, e as policies abaixo liberam a leitura deles, das fotos
+-- deles e dos arquivos dessas fotos — e de nada mais. As listas privadas
+-- continuam fechadas (o card nem mostra o nome delas), e o mapa de quem
+-- visita sem link continua mostrando só lugares de listas públicas.
+--
+-- Compartilhar é publicar: como nas listas públicas, quem tem a chave
+-- pública do site consegue listar todos os lugares com is_shared = true.
+-- Desligar is_shared fecha o link de novo (um lugar que também esteja numa
+-- lista pública continua legível por ela, como sempre foi).
+--
+-- ATENÇÃO: rodar antes de publicar o site novo — o botão de compartilhar
+-- grava nesta coluna.
+-- Idempotente: pode rodar de novo sem erro.
+-- ---------------------------------------------------------
+
+alter table public.places add column if not exists is_shared boolean not null default false;
+
+-- As policies de fotos abaixo consultam places com o papel de quem lê, então
+-- anon precisa enxergar a coluna.
+grant select (is_shared) on public.places to anon;
+
+drop policy if exists "public can read shared places" on public.places;
+create policy "public can read shared places" on public.places
+  for select to anon, authenticated using (is_shared = true);
+
+drop policy if exists "public can read photos of shared places" on public.place_photos;
+create policy "public can read photos of shared places" on public.place_photos
+  for select to anon, authenticated using (
+    exists (
+      select 1 from public.places p
+      where p.id = place_photos.place_id and p.is_shared = true
+    )
+  );
+
+drop policy if exists "anyone can read photos of shared places" on storage.objects;
+create policy "anyone can read photos of shared places" on storage.objects
+  for select to anon, authenticated using (
+    bucket_id = 'place-photos'
+    and exists (
+      select 1 from public.place_photos ph
+      join public.places p on p.id = ph.place_id
+      where ph.storage_path = storage.objects.name and p.is_shared = true
+    )
+  );
+
+notify pgrst, 'reload schema';

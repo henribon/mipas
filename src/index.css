@@ -261,6 +261,13 @@ a {
   filter: grayscale(1) contrast(0.9) brightness(1.05);
 }
 
+/* O mapa do Google embutido no card de compartilhamento só existe claro.
+   No tema escuro ele é invertido, e o hue-rotate devolve as cores certas ao
+   pin e aos ícones (sem ele o pin vermelho viraria ciano). */
+.dark .mipas-gmap {
+  filter: invert(0.9) hue-rotate(180deg) saturate(0.7) brightness(0.95);
+}
+
 .leaflet-control-attribution {
   background: transparent !important;
   color: var(--muted-foreground) !important;

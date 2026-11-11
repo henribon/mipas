@@ -60,6 +60,14 @@ roda inteiramente no free tier, só pro dono + amigos:
 - Autenticação: só o dono loga (email/senha, criado manualmente no dashboard
   do Supabase); amigos só visualizam listas marcadas como públicas via link
   (`?list=<uuid>`), sem precisar de conta.
+- Compartilhar um lugar sozinho: `?place=<uuid>` abre um card
+  ([`src/components/place-share.tsx`](src/components/place-share.tsx)) com as
+  fotos do lugar, o mapa do Google embutido (sem chave, pelas coordenadas do
+  pin — vira o destaque quando não há foto), "Como chegar" e o Instagram.
+  Quando o dono compartilha, o lugar ganha `places.is_shared = true`, que
+  libera pra anon só ele e as fotos dele; "Parar de compartilhar" desliga.
+  Instagram não deixa embutir perfil (`X-Frame-Options: DENY`), então lá é só
+  link. Fotos do Google exigiriam uma chave da Places API com faturamento.
 
 ### Comandos
 
