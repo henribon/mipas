@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as data from '@/data';
 import { errorDetail } from '@/errors';
 import { readSnapshot, snapshotKey, writeSnapshot } from '@/cache';
-import { placeShareUrl, shareOrCopy } from '@/share';
+import { appUrl, placeShareUrl, shareOrCopy } from '@/share';
 
 const REFRESH_AFTER_MS = 30 * 60 * 1000;
 const REFRESH_CHECK_MS = 5 * 60 * 1000;
@@ -190,19 +190,31 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
     }
   };
 
+  // Sharing a private list makes it public, so that asks first. As with a place, the
+  // write and the share sheet start together, straight from the click.
   const shareList = async (list) => {
+    const makePublic = canEdit && !list.is_public;
+    if (makePublic && !confirm(`Compartilhar a lista "${list.name}"?\n\nEla fica pública: quem tiver o link vê todos os lugares dela.`)) return;
+    const url = appUrl(`?list=${list.id}`);
+    const opening = makePublic
+      ? data.updateList(list.id, { is_public: true }).then(updated => {
+          setLists(ls => ls.map(l => (l.id === updated.id ? updated : l)));
+          return null;
+        }, e => e)
+      : Promise.resolve(null);
+    let outcome = null;
     try {
-      let target = list;
-      if (!list.is_public) {
-        target = await data.updateList(list.id, { is_public: true });
-        setLists(ls => ls.map(l => (l.id === target.id ? target : l)));
-      }
-      const url = `${window.location.origin}${window.location.pathname}?list=${target.id}`;
-      await navigator.clipboard.writeText(url);
-      alert('Link copiado:\n' + url);
+      outcome = await shareOrCopy({ title: list.name, text: list.name, url });
     } catch (e) {
-      fail('Não deu pra gerar o link', e);
+      console.error('[Mipas] não deu pra copiar o link:', e);
     }
+    const openError = await opening;
+    if (openError) {
+      fail('Não deu pra tornar a lista pública — quem receber o link não vai conseguir abrir', openError);
+      return;
+    }
+    if (outcome === 'copied') alert('Link da lista copiado:\n' + url);
+    else if (!outcome) prompt('Copie o link da lista:', url);
   };
 
   // The owner's share also opens the place to anyone with the link; a visitor's only

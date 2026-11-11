@@ -15,6 +15,16 @@ import { Share } from 'lucide-react';
 
 const VerticalthumbsSlider = React.lazy(() => import('@/components/ui/vertical-thumbnail-slider'));
 
+// Side padding of a desktop panel. Wide, it fills the window and centers its content.
+const WIDE_PANEL_MAX = 1160;
+export function panelSidePadding(wide) {
+  return wide ? `max(20px, calc((100% - ${WIDE_PANEL_MAX}px) / 2))` : '20px';
+}
+
+const cardGrid = (minWidth) => ({
+  display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(min(${minWidth}px, 100%), 1fr))`, alignItems: 'start',
+});
+
 function gradientForPlace(place, list) {
   const color = list ? list.color : '#FF5C38';
   return `linear-gradient(135deg, ${color}33, ${color}0D)`;
@@ -896,7 +906,7 @@ function OverlayTopRow({ onViewMap }) {
   );
 }
 
-function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor, variant }) {
+function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor, variant, wide = false }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
 
@@ -909,7 +919,7 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor,
 
   return (
     <div style={isPanel
-      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
+      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: `20px ${panelSidePadding(wide)} 40px` }
       : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
       {!isPanel && <OverlayTopRow onViewMap={onViewMap} />}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
@@ -925,7 +935,7 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor,
       </div>
 
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+      <div style={{ ...(wide ? cardGrid(340) : { display: 'flex', flexDirection: 'column' }), gap: 10, marginTop: 14 }}>
         {comDistancia.map(w => (
           <WindowCard key={w.id} bodyClassName="px-3.5 py-3">
             <div style={{ fontFamily: 'var(--display-font)', fontWeight: 400, fontSize: 15, color: C.ink }}>{w.name}</div>
@@ -956,14 +966,14 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor,
   );
 }
 
-function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, seletor, variant, menuDaLista }) {
+function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, seletor, variant, menuDaLista, wide = false }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [menu, abrirMenu, fecharMenu] = useContextMenu();
   const listaDoMenu = menu ? lists.find(l => l.id === menu.id) : null;
   return (
     <div style={isPanel
-      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
+      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: `20px ${panelSidePadding(wide)} 40px` }
       : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
       {!isPanel && <OverlayTopRow onViewMap={onViewMap} />}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
@@ -972,7 +982,7 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, 
         {canEdit && <AddButton rotulo="Criar lista" onClick={onNewList} />}
       </div>
       <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ ...(wide ? cardGrid(300) : { display: 'flex', flexDirection: 'column' }), gap: 12 }}>
         {lists.map(l => {
           const count = places.filter(p => (p.list_ids || []).includes(l.id)).length;
           return (
@@ -1531,7 +1541,7 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
   );
 }
 
-function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSharePlace, onUnsharePlace, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant }) {
+function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSharePlace, onUnsharePlace, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant, wide = false }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [menu, abrirMenu, fecharMenu] = useContextMenu();
@@ -1600,7 +1610,7 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
 
   return (
     <div style={isPanel
-      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: '20px 20px 40px' }
+      ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: `20px ${panelSidePadding(wide)} 40px` }
       : { position: 'absolute', inset: 0, zIndex: 650, background: C.paper, overflow: 'auto', padding: '62px 20px 120px' }}>
       <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Listas</Button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
@@ -1608,13 +1618,19 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
         <ListIcon list={list} size={52} radius={16} />
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--display-font)', fontSize: 21, fontWeight: 400, color: C.ink, lineHeight: 1.15 }}>{list.name}</div>
-          <div style={{ color: C.sub, fontWeight: 500, fontSize: 13 }}>{places.length} {places.length === 1 ? 'lugar' : 'lugares'}</div>
+          <div style={{ color: C.sub, fontWeight: 500, fontSize: 13 }}>
+            {places.length} {places.length === 1 ? 'lugar' : 'lugares'}
+            {canEdit && (list.is_public ? ' · pública' : ' · privada')}
+          </div>
         </div>
         {canEdit && onAddPlace && <AddButton rotulo="Adicionar novo lugar" onClick={onAddPlace} />}
-        {canEdit && (
-          <Button onClick={onShare} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-surface text-coral border border-line shadow-sm hover:bg-cream px-4 py-2 text-[12px]">
-            {list.is_public ? 'Copiar link' : 'Tornar pública e compartilhar'}
-          </Button>
+        {onShare && (canEdit || list.is_public) && (
+          <button type="button" onClick={onShare}
+            title={list.is_public ? 'Compartilhar a lista' : 'Compartilhar a lista (ela fica pública)'}
+            aria-label="Compartilhar a lista"
+            className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line bg-transparent text-coral transition hover:bg-cream">
+            <Share size={15} strokeWidth={2} />
+          </button>
         )}
       </div>
 
@@ -1637,12 +1653,12 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
-        {sortedPlaces.length === 0 && <div style={{ textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
+      <div style={{ ...(wide ? cardGrid(440) : { display: 'flex', flexDirection: 'column' }), gap: 12, marginTop: 18 }}>
+        {sortedPlaces.length === 0 && <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: C.sub, fontWeight: 600, marginTop: 40 }}>Nenhum lugar aqui ainda</div>}
         {secoes.map(sec => (
           <React.Fragment key={sec.titulo || 'todos'}>
             {sec.titulo && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
                 <span style={{ fontFamily: 'Inter', fontWeight: 800, fontSize: 12, letterSpacing: .6, textTransform: 'uppercase', color: sec.titulo === SEM_CATEGORIA ? C.sub : C.coral, flexShrink: 0 }}>
                   {sec.titulo}
                 </span>
