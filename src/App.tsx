@@ -20,7 +20,26 @@ import { useDrafts } from '@/hooks/useDrafts';
 import { useSearch } from '@/hooks/useSearch';
 import { useItinerary } from '@/hooks/useItinerary';
 import { useMipasMap } from '@/hooks/useMipasMap';
-import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit, HomeButton } from '@/components/mipas';
+import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit, HomeButton, panelSidePadding } from '@/components/mipas';
+import { Maximize2, Minimize2 } from 'lucide-react';
+
+const WIDE_PANEL_KEY = 'mipas-wide-panel';
+
+function readWidePanel() {
+  try {
+    return localStorage.getItem(WIDE_PANEL_KEY) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+function saveWidePanel(wide) {
+  try {
+    if (wide) localStorage.setItem(WIDE_PANEL_KEY, '1');
+    else localStorage.removeItem(WIDE_PANEL_KEY);
+  } catch (e) {
+  }
+}
 
 export default function App() {
   const C = getTheme();
@@ -37,6 +56,7 @@ export default function App() {
   const [selId, setSelId] = useState(null);
   const [returnListId, setReturnListId] = useState(null);
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [widePanel, setWidePanel] = useState(readWidePanel);
   const [routePlaceId, setRoutePlaceId] = useState(null);
 
   const [newListOpen, setNewListOpen] = useState(false);
@@ -144,6 +164,13 @@ export default function App() {
     revelarLugar(p);
     fecharBusca();
     goToPlace(p);
+  };
+
+  const toggleWidePanel = () => {
+    const next = !widePanel;
+    setWidePanel(next);
+    saveWidePanel(next);
+    invalidarTamanho();
   };
 
   const backToSidebar = () => {
@@ -280,7 +307,7 @@ export default function App() {
       separadorAntes: true, onClick: () => toggleListHidden(l, 'hidden_for_owner') },
     { rotulo: l.hidden_for_visitor ? 'Mostrar no mapa dos visitantes' : 'Ocultar do mapa dos visitantes',
       onClick: () => toggleListHidden(l, 'hidden_for_visitor') },
-    { rotulo: l.is_public ? 'Copiar link' : 'Tornar pública e copiar link', separadorAntes: true, onClick: () => shareList(l) },
+    { rotulo: l.is_public ? 'Compartilhar a lista' : 'Tornar pública e compartilhar', separadorAntes: true, onClick: () => shareList(l) },
     { rotulo: 'Adicionar novo lugar…', onClick: () => novoLugarNaLista(l) },
     { rotulo: 'Excluir lista', perigo: true, separadorAntes: true, onClick: () => removeList(l) },
   ];
@@ -388,11 +415,12 @@ export default function App() {
   const showLoading = loadingData && lists.length === 0 && places.length === 0;
 
   const mapaAparecendo = isDesktop || (tab === 'map' && !openList);
+  const panelOverMap = isDesktop && widePanel && !sidebarHidden;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: C.paper, overflow: 'hidden', display: isDesktop ? 'flex' : 'block' }}>
     <div style={isDesktop ? { position: 'relative', flex: '1 1 auto', minWidth: 0, height: '100%' } : { position: 'absolute', inset: 0 }}>
-      <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
+      <div ref={mapRef} style={{ position: 'absolute', inset: 0, zIndex: panelOverMap ? 0 : undefined }} />
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 110, background: C.fade, pointerEvents: 'none', zIndex: 400 }} />
 
       <Button onClick={toggleTheme} variant="outline" size="icon"
@@ -443,7 +471,7 @@ export default function App() {
       )}
 
       {loadError && (
-        <div style={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 999, background: 'rgba(255,80,60,.15)', border: '1px solid rgba(255,80,60,.35)', color: '#FF6B5B', borderRadius: 12, padding: '10px 14px', fontWeight: 600, fontSize: 13 }}>{loadError}</div>
+        <div style={{ position: 'absolute', ...(panelOverMap ? { bottom: 16 } : { top: 16 }), left: 16, right: 16, zIndex: 999, background: 'rgba(255,80,60,.15)', border: '1px solid rgba(255,80,60,.35)', color: '#FF6B5B', borderRadius: 12, padding: '10px 14px', fontWeight: 600, fontSize: 13 }}>{loadError}</div>
       )}
 
       {!sharedMode && (
@@ -720,8 +748,14 @@ export default function App() {
     </div>
 
     {isDesktop && !sidebarHidden && (
-      <div style={{ width: 'clamp(360px, 38%, 620px)', flexShrink: 0, borderLeft: `1px solid ${C.line}`, background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '14px 20px 0', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{
+        ...(widePanel
+          // Above the map's controls and place card, below the search and the sheets.
+          ? { position: 'absolute', inset: 0, zIndex: 760 }
+          : { width: 'clamp(360px, 38%, 620px)', flexShrink: 0, borderLeft: `1px solid ${C.line}` }),
+        background: C.paper, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ padding: `14px ${panelSidePadding(widePanel)} 0`, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           <HomeButton />
           {canEdit && !openList && (
             <Dropdown
@@ -730,6 +764,12 @@ export default function App() {
               onEscolher={setTab}
             />
           )}
+          <div style={{ flex: 1 }} />
+          <Button onClick={toggleWidePanel} variant="outline" size="icon" className="!text-sub"
+            title={widePanel ? 'Ver com o mapa' : 'Ver em tela cheia'}
+            aria-label={widePanel ? 'Ver com o mapa' : 'Ver em tela cheia'}>
+            {widePanel ? <Minimize2 size={15} strokeWidth={2} /> : <Maximize2 size={15} strokeWidth={2} />}
+          </Button>
         </div>
         {!openList && tab === 'wish' && canEdit ? (
           <WishPanel
@@ -739,6 +779,7 @@ export default function App() {
             onFui={marcarFui}
             onRemove={removeWish}
             variant="panel"
+            wide={widePanel}
           />
         ) : openList ? (
           <ListDetail
@@ -764,6 +805,7 @@ export default function App() {
             menuDaLista={canEdit ? menuDaLista : null}
             canEdit={canEdit}
             variant="panel"
+            wide={widePanel}
           />
         ) : (
           <ListsPanel
@@ -774,6 +816,7 @@ export default function App() {
             onNewList={() => setNewListOpen(true)}
             menuDaLista={canEdit ? menuDaLista : null}
             variant="panel"
+            wide={widePanel}
           />
         )}
       </div>
