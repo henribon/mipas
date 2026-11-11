@@ -16,6 +16,10 @@ const PLACE_PUBLIC_COLS = 'id, name, address, latitude, longitude, category, '
   + 'rating, description, avg_price, instagram, cover_photo_id, created_at, '
   + `place_lists(list_id), ${FOTOS_DO_LUGAR}(${PHOTO_PUBLIC_COLS})`;
 const PLACE_OWNER_COLS = `*, place_lists(list_id), ${FOTOS_DO_LUGAR}(*)`;
+// What the share card shows. The lists come along so a visitor can jump to a public one.
+const SHARED_PLACE_COLS = 'id, name, address, latitude, longitude, category, '
+  + 'rating, description, avg_price, instagram, cover_photo_id, '
+  + `place_lists(list_id, lists(id, name, icon, color, is_public)), ${FOTOS_DO_LUGAR}(${PHOTO_PUBLIC_COLS})`;
 
 async function isOwner() {
   const { data } = await client.auth.getSession();
@@ -32,7 +36,9 @@ async function fetchLists() {
 }
 
 async function fetchPlaces() {
-  const { data, error } = await client.from('places').select(await placeCols()).order('created_at');
+  // A visitor can also read places shared one by one; only those in a public list belong on the map.
+  const cols = (await isOwner()) ? PLACE_OWNER_COLS : PLACE_PUBLIC_COLS.replace('place_lists(list_id)', 'place_lists!inner(list_id)');
+  const { data, error } = await client.from('places').select(cols).order('created_at');
   if (error) throw error;
   return withCachedPhotoUrls(data.map(shapePlace));
 }
@@ -131,6 +137,23 @@ async function updatePlace(id, patch) {
 async function deletePlace(id) {
   const { error } = await client.from('places').delete().eq('id', id);
   if (error) throw error;
+}
+
+// is_shared lets anyone with the place's link read it, its photos included.
+async function setPlaceShared(id, shared) {
+  const { error } = await client.from('places').update({ is_shared: shared }).eq('id', id).select('id').single();
+  if (error) throw error;
+}
+
+// Photo URLs come back only if already signed; signMissingPhotoUrls fetches the rest.
+async function fetchSharedPlace(id) {
+  const { data, error } = await client.from('places').select(SHARED_PLACE_COLS).eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row: any = data;
+  const lists = (row.place_lists || []).map(pl => pl.lists).filter(Boolean);
+  const [place] = withCachedPhotoUrls([shapePlace(row)]);
+  return { ...place, lists };
 }
 
 // Signed URLs are reused across visits so the browser can serve the photos from its
@@ -375,6 +398,8 @@ export {
   createPlace,
   updatePlace,
   deletePlace,
+  setPlaceShared,
+  fetchSharedPlace,
   fetchHome,
   saveHome,
   clearHome,
