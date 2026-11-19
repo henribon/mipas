@@ -21,6 +21,13 @@ curto", "Roteiro de viagem SP"). Listas podem ser:
 - **Públicas** — outras pessoas podem visualizar, servindo como guia de
   lugares legais pra visitar.
 
+O dono pode agrupar listas em **pastas** (e pastas dentro de pastas), como
+as pastas de playlists do Spotify — tabela `list_folders` e
+`lists.folder_id`, regras de árvore em [`src/folders.ts`](src/folders.ts).
+É só organização da tela dele: não muda quem vê o quê, e o visitante vê as
+listas públicas soltas (nem as pastas nem `folder_id` têm leitura pra
+`anon`). Excluir uma pasta nunca apaga lista: o conteúdo sobe um nível.
+
 ## Eventos (feature futura)
 
 Dentro de listas **públicas**, será possível criar eventos associados a pins

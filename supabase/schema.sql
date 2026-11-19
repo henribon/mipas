@@ -889,3 +889,61 @@ create policy "anyone can read photos of shared places" on storage.objects
   );
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- Migração 2026-11-19 — pastas de listas
+--
+-- Como as pastas de playlists do Spotify: o dono agrupa listas em pastas, e
+-- uma pasta pode ficar dentro de outra (parent_id). É só organização da tela
+-- "Minhas listas" — não muda quem vê o quê: a lista continua pública ou
+-- privada por conta própria, e quem visita vê as listas públicas soltas.
+-- Por isso, como wish_places, não existe policy nem grant de coluna pra anon:
+-- nem as pastas nem lists.folder_id saem do aparelho do dono.
+--
+-- Apagar uma pasta não apaga lista nenhuma: o app sobe o conteúdo dela pra
+-- pasta de cima antes de apagar, e o "on delete set null" é a rede de
+-- segurança (o conteúdo vai pra raiz).
+--
+-- ATENÇÃO: rodar antes de publicar o site novo — ele grava em
+-- lists.folder_id e em list_folders. (Ler funciona sem: o site novo mostra as
+-- listas soltas se a tabela ainda não existir.)
+-- Idempotente: pode rodar de novo sem erro.
+-- ---------------------------------------------------------
+
+create table if not exists public.list_folders (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name        text not null,
+  parent_id   uuid references public.list_folders(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  constraint list_folders_not_own_parent check (parent_id is null or parent_id <> id)
+);
+
+create index if not exists idx_list_folders_owner_id on public.list_folders(owner_id);
+create index if not exists idx_list_folders_parent_id on public.list_folders(parent_id);
+
+alter table public.list_folders enable row level security;
+
+drop policy if exists "owner can read own folders" on public.list_folders;
+create policy "owner can read own folders" on public.list_folders
+  for select to authenticated using (auth.uid() = owner_id);
+
+drop policy if exists "owner can insert own folders" on public.list_folders;
+create policy "owner can insert own folders" on public.list_folders
+  for insert to authenticated with check (auth.uid() = owner_id);
+
+drop policy if exists "owner can update own folders" on public.list_folders;
+create policy "owner can update own folders" on public.list_folders
+  for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+
+drop policy if exists "owner can delete own folders" on public.list_folders;
+create policy "owner can delete own folders" on public.list_folders
+  for delete to authenticated using (auth.uid() = owner_id);
+
+alter table public.lists add column if not exists folder_id uuid
+  references public.list_folders(id) on delete set null;
+
+create index if not exists idx_lists_folder_id on public.lists(folder_id);
+
+notify pgrst, 'reload schema';

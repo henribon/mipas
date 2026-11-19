@@ -6,7 +6,7 @@ const PREFIX = 'mipas-snapshot:';
 const VERSION = 1;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-export type Snapshot = { lists: any[]; places: any[]; home: any; wishes: any[] };
+export type Snapshot = { lists: any[]; places: any[]; home: any; wishes: any[]; folders: any[] };
 
 export function snapshotKey(sharedListId: string | null, userId: string | null) {
   return `${PREFIX}${sharedListId ? `list:${sharedListId}` : 'map'}:${userId || 'anon'}`;
@@ -21,6 +21,7 @@ export function readSnapshot(key: string): Snapshot | null {
       places: data.withCachedPhotoUrls(saved.places),
       home: saved.home ?? null,
       wishes: Array.isArray(saved.wishes) ? saved.wishes : [],
+      folders: Array.isArray(saved.folders) ? saved.folders : [],
     };
   } catch {
     return null;

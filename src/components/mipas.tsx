@@ -11,7 +11,8 @@ import { WindowCard } from '@/components/ui/window-card';
 import { ListIcon, ListGlyph, LIST_ICONS, inkOn } from '@/components/list-icon';
 import { cn } from '@/lib/utils';
 import { instagramHandle, instagramUrl } from '@/share';
-import { Share } from 'lucide-react';
+import { folderTree, type FolderTree } from '@/folders';
+import { Check, Ellipsis, Folder, FolderPlus, LayoutList, Share } from 'lucide-react';
 
 const VerticalthumbsSlider = React.lazy(() => import('@/components/ui/vertical-thumbnail-slider'));
 
@@ -292,14 +293,14 @@ function DraftPhotos({ photos, onChange }) {
   );
 }
 
-function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inline }) {
+function ListPicker({ lists, selecionadas, onAlternar, onNewList = null, compacto = false, inline = false, detalhe = null, semChips = false }) {
   const C = getTheme();
   const [busca, setBusca] = useState('');
   const termo = busca.trim().toLowerCase();
   const filtradas = termo ? lists.filter(l => l.name.toLowerCase().includes(termo)) : lists;
   return (
     <div style={{ marginTop: 8 }}>
-      {selecionadas.length > 0 && (
+      {!semChips && selecionadas.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
           {selecionadas.map(id => {
             const l = lists.find(x => x.id === id);
@@ -329,7 +330,13 @@ function ListPicker({ lists, selecionadas, onAlternar, onNewList, compacto, inli
             }}>
               <input type="checkbox" checked={marcada} onChange={() => onAlternar(l.id)} style={{ accentColor: C.coral, width: 15, height: 15, cursor: 'pointer' }} />
               <ListIcon list={l} size={20} radius={6} />
-              <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 13.5, color: C.ink }}>{l.name}</span>
+              <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 13.5, color: C.ink, flex: 1, minWidth: 0 }}>{l.name}</span>
+              {detalhe && detalhe(l) && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, maxWidth: '45%', fontSize: 11.5, fontWeight: 600, color: C.sub }}>
+                  <Folder size={12} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detalhe(l)}</span>
+                </span>
+              )}
             </label>
           );
         })}
@@ -401,16 +408,18 @@ function ContextMenu({ x, y, itens, onClose }) {
       top: Math.max(8, Math.min(y, window.innerHeight - r.height - 8)),
       pronto: true,
     });
-  }, [x, y]);
+  }, [x, y, submenu]);
 
   useEffect(() => {
     const fechar = () => onClose();
+    // Scrolling a long submenu inside the menu must not close it.
+    const naRolagem = (ev) => { if (!(ref.current && ref.current.contains(ev.target))) onClose(); };
     const naTecla = (ev) => { if (ev.key === 'Escape') onClose(); };
     const tique = setTimeout(() => {
       window.addEventListener('pointerdown', fechar);
       window.addEventListener('contextmenu', fechar);
       window.addEventListener('resize', fechar);
-      window.addEventListener('scroll', fechar, true);
+      window.addEventListener('scroll', naRolagem, true);
       window.addEventListener('keydown', naTecla);
     }, 0);
     return () => {
@@ -418,7 +427,7 @@ function ContextMenu({ x, y, itens, onClose }) {
       window.removeEventListener('pointerdown', fechar);
       window.removeEventListener('contextmenu', fechar);
       window.removeEventListener('resize', fechar);
-      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('scroll', naRolagem, true);
       window.removeEventListener('keydown', naTecla);
     };
   }, [onClose]);
@@ -432,6 +441,8 @@ function ContextMenu({ x, y, itens, onClose }) {
   const realce = (ev, ligado) => { ev.currentTarget.style.background = ligado ? C.cream : 'transparent'; };
 
   const paraEsquerda = pos.left > window.innerWidth - 400;
+  // On a phone a side submenu has no room, so it opens below its item instead.
+  const largo = window.innerWidth >= 640;
 
   return ReactDOM.createPortal(
     <div ref={ref}
@@ -476,6 +487,28 @@ function ContextMenu({ x, y, itens, onClose }) {
                 </div>
               )}
             </div>
+          ) : it.submenu ? (
+            <div style={{ position: 'relative' }}
+              onPointerEnter={ev => { if (largo && ev.pointerType === 'mouse') setSubmenu(i); }}>
+              <button type="button" aria-expanded={submenu === i}
+                onClick={ev => { ev.stopPropagation(); setSubmenu(largo || submenu !== i ? i : null); }}
+                onMouseEnter={ev => realce(ev, true)} onMouseLeave={ev => realce(ev, false)}
+                style={estiloItem}>
+                <span style={{ flex: 1 }}>{it.rotulo}</span>
+                <span style={{ opacity: .5, fontSize: 15, lineHeight: 1 }}>
+                  {largo ? (paraEsquerda ? '‹' : '›') : (submenu === i ? '▾' : '▸')}
+                </span>
+              </button>
+              {submenu === i && (largo ? (
+                <SubmenuFlyout paraEsquerda={paraEsquerda}>
+                  <SubmenuItems itens={it.submenu} estiloItem={estiloItem} realce={realce} onClose={onClose} />
+                </SubmenuFlyout>
+              ) : (
+                <div style={{ maxHeight: 240, overflowY: 'auto', margin: '2px 0 4px 10px', paddingLeft: 4, borderLeft: `1.5px solid ${C.line}` }}>
+                  <SubmenuItems itens={it.submenu} estiloItem={estiloItem} realce={realce} onClose={onClose} />
+                </div>
+              ))}
+            </div>
           ) : (
             <button type="button"
               onClick={ev => { ev.stopPropagation(); onClose(); it.onClick(); }}
@@ -490,6 +523,69 @@ function ContextMenu({ x, y, itens, onClose }) {
     </div>,
     document.body,
   );
+}
+
+function SubmenuFlyout({ paraEsquerda, children }) {
+  const C = getTheme();
+  const ref = useRef(null);
+  const [dy, setDy] = useState(0);
+  useLayoutEffect(() => {
+    const r = ref.current.getBoundingClientRect();
+    const sobra = window.innerHeight - 8 - r.bottom;
+    if (sobra < 0) setDy(Math.max(sobra, 8 - r.top));
+  }, []);
+  return (
+    <div ref={ref} onPointerDown={ev => ev.stopPropagation()}
+      style={{
+        position: 'absolute', top: -5 + dy, [paraEsquerda ? 'right' : 'left']: '100%',
+        marginLeft: paraEsquerda ? 0 : 6, marginRight: paraEsquerda ? 6 : 0,
+        minWidth: 200, maxWidth: 280, maxHeight: 'min(340px, calc(100vh - 16px))', overflowY: 'auto',
+        background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 5,
+        boxShadow: '0 18px 45px rgba(0,0,0,.45)', animation: 'fadeIn .12s',
+      }}>
+      {children}
+    </div>
+  );
+}
+
+// Items of a submenu: { rotulo, onClick, atual, nivel, icone, separadorAntes }.
+// The current choice shows checked and does nothing.
+function SubmenuItems({ itens, estiloItem, realce, onClose }) {
+  const C = getTheme();
+  return itens.filter(Boolean).map((sub, j) => (
+    <React.Fragment key={j}>
+      {sub.separadorAntes && <div style={{ height: 1, background: C.line, margin: '5px 6px' }} />}
+      <button type="button" disabled={sub.atual} aria-current={sub.atual || undefined}
+        onClick={ev => { ev.stopPropagation(); onClose(); sub.onClick(); }}
+        onMouseEnter={ev => { if (!sub.atual) realce(ev, true); }}
+        onMouseLeave={ev => realce(ev, false)}
+        style={{
+          ...estiloItem, paddingLeft: 10 + (sub.nivel || 0) * 14,
+          cursor: sub.atual ? 'default' : 'pointer', color: sub.atual ? C.sub : C.ink,
+        }}>
+        {sub.icone}
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.rotulo}</span>
+        {sub.atual && <Check size={14} strokeWidth={2.4} aria-hidden="true" style={{ flexShrink: 0 }} />}
+      </button>
+    </React.Fragment>
+  ));
+}
+
+// The "move to" choices for a list or a folder: the top level, then every folder
+// as a tree. `excluir` leaves out a folder being moved and everything inside it.
+export function opcoesDePasta(tree: FolderTree, { atual, excluir = null, onEscolher, onNova = null }) {
+  const C = getTheme();
+  const icone = (Icone) => <Icone size={14} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0, color: C.sub }} />;
+  return [
+    { rotulo: 'Minhas listas', icone: icone(LayoutList), atual: !atual, onClick: () => onEscolher(null) },
+    ...tree.flat()
+      .filter(({ folder }) => !(excluir && tree.isInside(folder.id, excluir)))
+      .map(({ folder, depth }) => ({
+        rotulo: folder.name, nivel: depth, icone: icone(Folder),
+        atual: folder.id === atual, onClick: () => onEscolher(folder.id),
+      })),
+    onNova && { rotulo: 'Nova pasta…', icone: icone(FolderPlus), separadorAntes: true, onClick: onNova },
+  ];
 }
 
 function useContextMenu() {
@@ -619,6 +715,110 @@ function ListSheet({ list = null, onCancel, onCreate, creating }) {
           <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
           <Btn primary disabled={!name.trim() || creating} onClick={() => name.trim() && onCreate({ name: name.trim(), icon, color })} style={{ flex: 2 }}>
             {creating ? (editando ? 'Salvando…' : 'Criando…') : (editando ? 'Salvar' : 'Criar lista')}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FolderTile({ size = 48, radius = 14 }) {
+  const C = getTheme();
+  return (
+    <span aria-hidden="true" style={{
+      width: size, height: size, borderRadius: radius, background: C.cream, color: C.ink,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      <Folder size={Math.round(size * 0.5)} strokeWidth={2} />
+    </span>
+  );
+}
+
+// Creates a folder, or renames one. onSave resolves to false when it didn't go through.
+function FolderSheet({ folder = null, dentroDe = null, onCancel, onSave }) {
+  const C = getTheme();
+  const editando = !!folder;
+  const [name, setName] = useState(folder ? folder.name : '');
+  const [saving, setSaving] = useState(false);
+  const nome = name.trim();
+  const salvar = async () => {
+    if (!nome || saving || (editando && nome === folder.name)) return;
+    setSaving(true);
+    if (!(await onSave(nome))) setSaving(false);
+  };
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 900 }}>
+      <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
+      <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
+        <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <FolderTile size={48} radius={14} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--display-font)', fontSize: 19, fontWeight: 400, color: C.ink }}>{editando ? 'Renomear pasta' : 'Nova pasta'}</div>
+            <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 2 }}>
+              {editando ? 'As listas dela continuam onde estão.' : (dentroDe ? `Dentro de "${dentroDe}"` : 'Junte listas parecidas num lugar só.')}
+            </div>
+          </div>
+        </div>
+        <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder='Ex: "Viagens", "Comida"'
+          onKeyDown={e => { if (e.key === 'Enter') salvar(); }}
+          style={{ width: '100%', boxSizing: 'border-box', marginTop: 14, background: C.surface, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: '13px 16px', fontSize: 15, fontWeight: 600, color: C.ink }} />
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
+          <Btn primary disabled={!nome || saving || (editando && nome === folder.name)} onClick={salvar} style={{ flex: 2 }}>
+            {saving ? (editando ? 'Salvando…' : 'Criando…') : (editando ? 'Salvar' : 'Criar pasta')}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Checks the lists that sit right in the folder. Checking one from elsewhere moves it
+// in; unchecking one moves it out to where the folder itself is.
+function FolderListsSheet({ folder, lists, tree, onCancel, onSave }) {
+  const C = getTheme();
+  const [diretas] = useState(() => tree.childLists(folder.id).map(l => l.id));
+  const [marcadas, setMarcadas] = useState(diretas);
+  const [saving, setSaving] = useState(false);
+  const alternar = (id) => setMarcadas(ms => (ms.includes(id) ? ms.filter(x => x !== id) : [...ms, id]));
+  const entrar = marcadas.filter(id => !diretas.includes(id));
+  const sair = diretas.filter(id => !marcadas.includes(id));
+  const pai = tree.parentOf(folder.id);
+  const onde = (l) => {
+    const f = tree.folderOf(l);
+    return f && f !== folder.id ? tree.byId.get(f).name : null;
+  };
+  const salvar = async () => {
+    setSaving(true);
+    await onSave({ entrar, sair });
+  };
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 900 }}>
+      <div onClick={onCancel} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', animation: 'fadeIn .2s' }} />
+      <div className="mipas-sheet" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: 'calc(100% - 48px)', overflowY: 'auto', boxSizing: 'border-box', background: C.paper, border: `1px solid ${C.line}`, borderRadius: '20px 20px 0 0', padding: '10px 20px 28px', animation: 'sheetUp .3s cubic-bezier(.2,.9,.3,1)' }}>
+        <div style={{ width: 36, height: 4, borderRadius: 99, background: C.line, margin: '0 auto 14px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <FolderTile size={48} radius={14} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--display-font)', fontSize: 19, fontWeight: 400, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.name}</div>
+            <div style={{ color: C.sub, fontWeight: 500, fontSize: 13, marginTop: 2 }}>Marque as listas que ficam nesta pasta.</div>
+          </div>
+        </div>
+        {lists.length === 0 ? (
+          <div style={{ marginTop: 18, textAlign: 'center', color: C.sub, fontWeight: 600, fontSize: 13.5 }}>Você ainda não tem nenhuma lista.</div>
+        ) : (
+          <ListPicker lists={lists} selecionadas={marcadas} onAlternar={alternar} detalhe={onde} semChips inline />
+        )}
+        {sair.length > 0 && (
+          <div style={{ marginTop: 10, fontSize: 12, fontWeight: 500, color: C.sub, lineHeight: 1.4 }}>
+            {sair.length === 1 ? 'A desmarcada sai' : `As ${sair.length} desmarcadas saem`} da pasta e {sair.length === 1 ? 'vai' : 'vão'} pra {pai ? `"${tree.byId.get(pai).name}"` : 'Minhas listas'}.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
+          <Btn primary disabled={saving || (entrar.length === 0 && sair.length === 0)} onClick={salvar} style={{ flex: 2 }}>
+            {saving ? 'Salvando…' : 'Salvar'}
           </Btn>
         </div>
       </div>
@@ -966,32 +1166,180 @@ function WishPanel({ wishes, origem, onNew, onFui, onRemove, onViewMap, seletor,
   );
 }
 
-function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, seletor, variant, menuDaLista, wide = false }) {
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
+// Dragging cards onto folders is for a mouse; on touch the menus and sheets do it.
+const ponteiroFino = () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+
+// The owner's lists, grouped in folders like Spotify's playlists. `pastas` is null for
+// a visitor, who sees the public lists loose. Inside a folder it shows that folder's
+// subfolders and lists, with a way back to the level above.
+function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, seletor, variant, menuDaLista, pastas = null, wide = false }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
-  const [menu, abrirMenu, fecharMenu] = useContextMenu();
-  const listaDoMenu = menu ? lists.find(l => l.id === menu.id) : null;
+  const [menu, setMenu] = useState(null);
+  const fecharMenu = React.useCallback(() => setMenu(null), []);
+  const [arrasto, setArrasto] = useState(null);
+  const [alvoDrop, setAlvoDrop] = useState(undefined);
+  const [arrastavel] = useState(ponteiroFino);
+
+  const tree: FolderTree = pastas ? pastas.tree : null;
+  const atual = pastas ? pastas.atual : null;
+  const atualId = atual ? atual.id : null;
+  const pastasAqui = pastas ? tree.childFolders(atualId) : [];
+  const listasAqui = pastas ? tree.childLists(atualId) : lists;
+  const pai = atual ? tree.parentOf(atual.id) : null;
+
+  const lugaresEm = (ls) => {
+    const ids = new Set(ls.map(l => l.id));
+    return places.filter(p => (p.list_ids || []).some(id => ids.has(id))).length;
+  };
+  const resumoPasta = (id) => {
+    const nPastas = tree.childFolders(id).length;
+    const nListas = tree.childLists(id).length;
+    if (!nPastas && !nListas) return 'pasta vazia';
+    return [nPastas && plural(nPastas, 'pasta', 'pastas'), nListas && plural(nListas, 'lista', 'listas')].filter(Boolean).join(' · ');
+  };
+
+  const porClique = (alvo) => (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setMenu({ alvo, x: ev.clientX, y: ev.clientY });
+  };
+  const porBotao = (alvo) => (ev) => {
+    ev.stopPropagation();
+    const r = ev.currentTarget.getBoundingClientRect();
+    setMenu({ alvo, x: r.right - 200, y: r.bottom + 6 });
+  };
+
+  const itensDoMenu = () => {
+    if (!menu) return null;
+    const { alvo } = menu;
+    if (alvo.tipo === 'novo') {
+      return [
+        { rotulo: 'Nova lista', onClick: () => pastas.novaLista(atualId) },
+        { rotulo: 'Nova pasta', onClick: () => pastas.novaPasta(atualId) },
+        atual && { rotulo: 'Escolher listas…', separadorAntes: true, onClick: () => pastas.escolherListas(atual) },
+      ];
+    }
+    if (alvo.tipo === 'pasta') {
+      const f = tree.byId.get(alvo.id);
+      return f ? pastas.menuDaPasta(f) : null;
+    }
+    const l = lists.find(x => x.id === alvo.id);
+    return l && menuDaLista ? menuDaLista(l) : null;
+  };
+  const itens = itensDoMenu();
+
+  // A folder can't go into itself or anything inside it.
+  const podeSoltar = (destino) => !!arrasto && (arrasto.tipo === 'lista' || !tree.isInside(destino, arrasto.id));
+  const arrastar = (tipo, id) => (pastas && arrastavel ? {
+    draggable: true,
+    onDragStart: (ev) => {
+      ev.dataTransfer.effectAllowed = 'move';
+      ev.dataTransfer.setData('text/plain', '');
+      setArrasto({ tipo, id });
+    },
+    onDragEnd: () => { setArrasto(null); setAlvoDrop(undefined); },
+  } : {});
+  const soltarEm = (destino, chave) => (pastas ? {
+    onDragOver: (ev) => {
+      if (!podeSoltar(destino)) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      if (alvoDrop !== chave) setAlvoDrop(chave);
+    },
+    onDragLeave: (ev) => {
+      if (!ev.currentTarget.contains(ev.relatedTarget)) setAlvoDrop(a => (a === chave ? undefined : a));
+    },
+    onDrop: (ev) => {
+      ev.preventDefault();
+      const solto = arrasto;
+      setArrasto(null);
+      setAlvoDrop(undefined);
+      if (!solto || !podeSoltar(destino)) return;
+      if (solto.tipo === 'lista') pastas.moverLista(solto.id, destino);
+      else pastas.moverPasta(solto.id, destino);
+    },
+  } : {});
+  const realceDrop = (chave, id) => ({
+    ...(alvoDrop === chave ? { outline: `2px solid ${C.coral}`, outlineOffset: -2, background: C.coral + '14' } : null),
+    ...(arrasto && arrasto.id === id ? { opacity: .45 } : null),
+    transition: 'opacity .15s, background .15s',
+  });
+
+  const nomeDoTopo = canEdit ? 'Minhas listas' : 'Lista do Bon';
+  const listasDaPasta = atual ? tree.listsInside(atual.id) : [];
+
   return (
     <div style={isPanel
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: `20px ${panelSidePadding(wide)} 40px` }
       : { position: 'absolute', inset: 0, zIndex: 600, background: C.paper, overflow: 'auto', padding: '70px 20px 120px' }}>
       {!isPanel && <OverlayTopRow onViewMap={onViewMap} />}
       {seletor && <div style={{ marginBottom: 12 }}>{seletor}</div>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title" style={{ fontFamily: 'var(--display-font)', fontSize: 24, fontWeight: 400, color: C.ink, flex: 1 }}>{canEdit ? 'Minhas listas' : 'Lista do Bon'}</div>
-        {canEdit && <AddButton rotulo="Criar lista" onClick={onNewList} />}
-      </div>
-      <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
+
+      {atual ? (
+        <React.Fragment>
+          <div {...soltarEm(pai, 'pai')} style={{ display: 'inline-block', borderRadius: 24, marginBottom: 12, ...realceDrop('pai', null) }}>
+            <Button onClick={() => pastas.abrir(pai)} title={arrastavel ? 'Arraste uma lista pra cá pra tirar da pasta' : undefined}
+              className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none">
+              ‹ {pai ? tree.byId.get(pai).name : nomeDoTopo}
+            </Button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }} onContextMenu={porClique({ tipo: 'pasta', id: atual.id })}>
+            <FolderTile size={52} radius={16} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'var(--display-font)', fontSize: 21, fontWeight: 400, color: C.ink, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{atual.name}</div>
+              <div style={{ color: C.sub, fontWeight: 500, fontSize: 13 }}>
+                {resumoPasta(atual.id)}
+                {listasDaPasta.length > 0 && ` · ${plural(lugaresEm(listasDaPasta), 'lugar', 'lugares')}`}
+              </div>
+            </div>
+            <AddButton rotulo="Adicionar nesta pasta" onClick={porBotao({ tipo: 'novo' })} />
+            <button type="button" onClick={porBotao({ tipo: 'pasta', id: atual.id })}
+              title="Opções da pasta" aria-label="Opções da pasta"
+              className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line bg-transparent text-coral transition hover:bg-cream">
+              <Ellipsis size={16} strokeWidth={2} />
+            </button>
+          </div>
+          <div style={{ marginBottom: 18 }} />
+        </React.Fragment>
+      ) : (
+        <React.Fragment>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="section-title" style={{ fontFamily: 'var(--display-font)', fontSize: 24, fontWeight: 400, color: C.ink, flex: 1 }}>{nomeDoTopo}</div>
+            {canEdit && (pastas
+              ? <AddButton rotulo="Criar lista ou pasta" onClick={porBotao({ tipo: 'novo' })} />
+              : <AddButton rotulo="Criar lista" onClick={onNewList} />)}
+          </div>
+          <div style={{ color: C.sub, fontWeight: 600, fontSize: 13.5, marginTop: 2, marginBottom: 20 }}>{places.length} lugares guardados</div>
+        </React.Fragment>
+      )}
+
       <div style={{ ...(wide ? cardGrid(300) : { display: 'flex', flexDirection: 'column' }), gap: 12 }}>
-        {lists.map(l => {
-          const count = places.filter(p => (p.list_ids || []).includes(l.id)).length;
+        {pastasAqui.map(f => (
+          <WindowCard key={f.id} onClick={() => pastas.abrir(f.id)} bodyClassName="flex items-center gap-3.5 p-4"
+            onContextMenu={porClique({ tipo: 'pasta', id: f.id })}
+            {...arrastar('pasta', f.id)} {...soltarEm(f.id, f.id)}
+            style={realceDrop(f.id, f.id)}>
+            <FolderTile size={48} radius={14} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink, overflowWrap: 'anywhere' }}>{f.name}</div>
+              <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{resumoPasta(f.id)}</div>
+            </div>
+          </WindowCard>
+        ))}
+        {listasAqui.map(l => {
+          const count = lugaresEm([l]);
           return (
             <WindowCard key={l.id} onClick={() => onOpenList(l.id)} bodyClassName="flex items-center gap-3.5 p-4"
-              onContextMenu={menuDaLista ? abrirMenu(l.id) : undefined}>
+              onContextMenu={menuDaLista ? porClique({ tipo: 'lista', id: l.id }) : undefined}
+              {...arrastar('lista', l.id)}
+              style={realceDrop(null, l.id)}>
               <ListIcon list={l} size={48} radius={14} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: C.ink }}>{l.name}</div>
-                <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{count} {count === 1 ? 'lugar' : 'lugares'}</div>
+                <div style={{ color: C.sub, fontWeight: 600, fontSize: 13 }}>{plural(count, 'lugar', 'lugares')}</div>
                 {canEdit && (l.hidden_for_owner || l.hidden_for_visitor) && (
                   <div style={{ marginTop: 3, fontSize: 11, fontWeight: 600, color: C.sub, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
@@ -1008,8 +1356,21 @@ function ListsPanel({ lists, places, canEdit, onOpenList, onNewList, onViewMap, 
         })}
       </div>
 
-      {listaDoMenu && menuDaLista && (
-        <ContextMenu x={menu.x} y={menu.y} itens={menuDaLista(listaDoMenu)} onClose={fecharMenu} />
+      {atual && pastasAqui.length === 0 && listasAqui.length === 0 && (
+        <div style={{ textAlign: 'center', marginTop: 28, color: C.sub }}>
+          <div style={{ fontWeight: 700, fontSize: 14.5, color: C.ink }}>Pasta vazia</div>
+          <div style={{ fontWeight: 500, fontSize: 13, marginTop: 4, lineHeight: 1.45 }}>
+            Traga listas que você já tem ou crie uma nova aqui dentro.
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 14 }}>
+            <Button onClick={() => pastas.escolherListas(atual)} variant="primary" size="md">Escolher listas</Button>
+            <Button onClick={() => pastas.novaLista(atualId)} variant="outline" size="md">Nova lista</Button>
+          </div>
+        </div>
+      )}
+
+      {menu && itens && (
+        <ContextMenu x={menu.x} y={menu.y} itens={itens} onClose={fecharMenu} />
       )}
     </div>
   );
@@ -1541,7 +1902,7 @@ function PlaceRow({ place: p, list, todasListas, canEdit, expanded, onToggle, on
   );
 }
 
-function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemove, onRemoveFromList, onShare, onSharePlace, onUnsharePlace, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant, wide = false }) {
+function ListDetail({ list, places, todasListas, origem, voltarRotulo = 'Listas', onBack, onOpen, onRemove, onRemoveFromList, onShare, onSharePlace, onUnsharePlace, onSavePlace, onAddPhoto, onRemovePhoto, onReorderPhotos, onSetCover, onBuildItinerary, onAddPlace, onDeleteList, menuDaLista, canEdit, variant, wide = false }) {
   const C = getTheme();
   const isPanel = variant === 'panel';
   const [menu, abrirMenu, fecharMenu] = useContextMenu();
@@ -1612,7 +1973,7 @@ function ListDetail({ list, places, todasListas, origem, onBack, onOpen, onRemov
     <div style={isPanel
       ? { position: 'relative', height: '100%', boxSizing: 'border-box', background: C.paper, overflow: 'auto', padding: `20px ${panelSidePadding(wide)} 40px` }
       : { position: 'absolute', inset: 0, zIndex: 650, background: C.paper, overflow: 'auto', padding: '62px 20px 120px' }}>
-      <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ Listas</Button>
+      <Button onClick={onBack} className="rounded-3xl font-semibold cursor-pointer transition inline-flex items-center justify-center gap-1.5 border-none bg-transparent text-coral hover:opacity-70 px-3 py-1.5 text-[14px] shadow-none mb-3 self-start">‹ {voltarRotulo}</Button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
         onContextMenu={menuDaLista ? abrirMenu(list.id) : undefined}>
         <ListIcon list={list} size={52} radius={16} />
@@ -2113,6 +2474,8 @@ export {
   Btn,
   SaveSheet,
   ListSheet,
+  FolderSheet,
+  FolderListsSheet,
   HomeSheet,
   PlaceCard,
   ListsPanel,

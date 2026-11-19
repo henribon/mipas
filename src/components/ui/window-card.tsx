@@ -1,7 +1,8 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
-export type WindowCardProps = {
+// Anything else (drag and drop, aria-*) goes straight to the outer element.
+export type WindowCardProps = Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> & {
   children?: React.ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -21,9 +22,11 @@ export function WindowCard({
   title,
   actions,
   style,
+  ...rest
 }: WindowCardProps) {
   return (
     <div
+      {...rest}
       onClick={onClick}
       onContextMenu={onContextMenu}
       style={style}
