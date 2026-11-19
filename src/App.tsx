@@ -20,7 +20,8 @@ import { useDrafts } from '@/hooks/useDrafts';
 import { useSearch } from '@/hooks/useSearch';
 import { useItinerary } from '@/hooks/useItinerary';
 import { useMipasMap } from '@/hooks/useMipasMap';
-import { SaveSheet, ListSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit, HomeButton, panelSidePadding } from '@/components/mipas';
+import { SaveSheet, ListSheet, FolderSheet, FolderListsSheet, HomeSheet, PlaceCard, ListsPanel, ListDetail, WishPanel, WishSheet, MapLayersPanel, ItineraryPanel, OriginPanel, PlaceHit, HomeButton, panelSidePadding, opcoesDePasta } from '@/components/mipas';
+import { folderTree } from '@/folders';
 import { Maximize2, Minimize2 } from 'lucide-react';
 
 const WIDE_PANEL_KEY = 'mipas-wide-panel';
@@ -60,6 +61,10 @@ export default function App() {
   const [routePlaceId, setRoutePlaceId] = useState(null);
 
   const [newListOpen, setNewListOpen] = useState(false);
+  const [newListFolderId, setNewListFolderId] = useState(null);
+  const [openFolderId, setOpenFolderId] = useState(null);
+  const [folderSheet, setFolderSheet] = useState(null);
+  const [pickingFolderId, setPickingFolderId] = useState(null);
   const [creatingList, setCreatingList] = useState(false);
   const [pendingListPick, setPendingListPick] = useState(false);
   const [editingList, setEditingList] = useState(null);
@@ -69,6 +74,7 @@ export default function App() {
 
   const {
     lists, setLists, places, setPlaces, home, wishes, setWishes,
+    folders, createFolder, renameFolder, moveFolder, moveListsToFolder, deleteFolder,
     loadingData, loadError, loadId,
     setListColor, removePlaceFromList, shareList, sharePlace, unsharePlace, savePlaceEdits,
     addPhoto, reorderPhotos, removePhoto, setCoverPhoto, removeWish,
@@ -251,7 +257,7 @@ export default function App() {
   const addList = async (l) => {
     setCreatingList(true);
     try {
-      const created = await data.createList(l);
+      const created = await data.createList({ ...l, folder_id: newListFolderId });
       setLists(ls => [...ls, created]);
       setNewListOpen(false);
       if (pendingListPick && draft) {
@@ -295,6 +301,11 @@ export default function App() {
     }
   };
 
+  const openList = lists.find(l => l.id === openListId);
+  const tree = useMemo(() => folderTree(folders, lists), [folders, lists]);
+  const openFolder = canEdit ? tree.byId.get(openFolderId) || null : null;
+  const pickingFolder = pickingFolderId ? tree.byId.get(pickingFolderId) || null : null;
+
   const menuDaLista = (l) => [
     openListId !== l.id && { rotulo: 'Abrir lista', onClick: () => setOpenListId(l.id) },
     { rotulo: 'Editar lista…', onClick: () => setEditingList(l) },
@@ -303,6 +314,11 @@ export default function App() {
       opcoes: listColors.includes(l.color) ? listColors : [l.color, ...listColors],
       onEscolher: (cor) => setListColor(l, cor),
     } },
+    { rotulo: 'Mover para pasta', submenu: opcoesDePasta(tree, {
+      atual: tree.folderOf(l),
+      onEscolher: (folderId) => moveListsToFolder([l.id], folderId),
+      onNova: () => setFolderSheet({ parentId: tree.folderOf(l), listId: l.id }),
+    }) },
     { rotulo: l.hidden_for_owner ? 'Mostrar no meu mapa' : 'Ocultar do meu mapa',
       separadorAntes: true, onClick: () => toggleListHidden(l, 'hidden_for_owner') },
     { rotulo: l.hidden_for_visitor ? 'Mostrar no mapa dos visitantes' : 'Ocultar do mapa dos visitantes',
@@ -311,6 +327,73 @@ export default function App() {
     { rotulo: 'Adicionar novo lugar…', onClick: () => novoLugarNaLista(l) },
     { rotulo: 'Excluir lista', perigo: true, separadorAntes: true, onClick: () => removeList(l) },
   ];
+
+  // Folders: the owner's own way to group lists, like Spotify's playlist folders.
+  const menuDaPasta = (f) => [
+    openFolderId !== f.id && { rotulo: 'Abrir pasta', onClick: () => setOpenFolderId(f.id) },
+    { rotulo: 'Renomear pasta…', onClick: () => setFolderSheet({ folder: f }) },
+    { rotulo: 'Escolher listas…', onClick: () => setPickingFolderId(f.id) },
+    { rotulo: 'Mover para', submenu: opcoesDePasta(tree, {
+      atual: tree.parentOf(f.id),
+      excluir: f.id,
+      onEscolher: (parentId) => moveFolder(f, parentId),
+    }) },
+    { rotulo: 'Excluir pasta', perigo: true, separadorAntes: true, onClick: () => removeFolder(f) },
+  ];
+
+  const removeFolder = async (f) => {
+    const parent = tree.parentOf(f.id);
+    const ok = await deleteFolder(f, { lists: tree.childLists(f.id).length, folders: tree.childFolders(f.id).length });
+    if (ok) setOpenFolderId(id => (id === f.id ? parent : id));
+  };
+
+  const saveFolder = async (name) => {
+    const sheet = folderSheet;
+    if (sheet.folder) {
+      const ok = await renameFolder(sheet.folder, name);
+      if (ok) setFolderSheet(null);
+      return ok;
+    }
+    const created = await createFolder({ name, parent_id: sheet.parentId ?? null });
+    if (!created) return false;
+    if (sheet.listId) await moveListsToFolder([sheet.listId], created.id);
+    // A folder made from the + opens right away, ready to get its lists.
+    else setOpenFolderId(created.id);
+    setFolderSheet(null);
+    return true;
+  };
+
+  const saveFolderLists = async ({ entrar, sair }) => {
+    const f = pickingFolder;
+    await Promise.all([
+      entrar.length && moveListsToFolder(entrar, f.id),
+      sair.length && moveListsToFolder(sair, tree.parentOf(f.id)),
+    ]);
+    setPickingFolderId(null);
+  };
+
+  const pastas = canEdit ? {
+    tree,
+    atual: openFolder,
+    abrir: setOpenFolderId,
+    novaLista: (folderId) => { setNewListFolderId(folderId); setNewListOpen(true); },
+    novaPasta: (parentId) => setFolderSheet({ parentId }),
+    escolherListas: (f) => setPickingFolderId(f.id),
+    menuDaPasta,
+    moverLista: (listId, folderId) => moveListsToFolder([listId], folderId),
+    moverPasta: (folderId, parentId) => {
+      const f = tree.byId.get(folderId);
+      if (f) moveFolder(f, parentId);
+    },
+  } : null;
+
+  // Back from a list goes to the folder it's in, wherever it was opened from.
+  const openListFolderId = openList && canEdit ? tree.folderOf(openList) : null;
+  const backFromList = () => {
+    setOpenListId(null);
+    if (canEdit) setOpenFolderId(openListFolderId);
+  };
+  const backLabel = openListFolderId ? tree.byId.get(openListFolderId).name : 'Listas';
 
   const removeList = async (list) => {
     const soNesta = places.filter(p => (p.list_ids || []).length === 1 && p.list_ids[0] === list.id);
@@ -410,7 +493,6 @@ export default function App() {
   };
 
   const sel = places.find(p => p.id === selId);
-  const openList = lists.find(l => l.id === openListId);
 
   const showLoading = loadingData && lists.length === 0 && places.length === 0;
 
@@ -600,8 +682,9 @@ export default function App() {
           places={places}
           canEdit={canEdit}
           onOpenList={setOpenListId}
-          onNewList={() => setNewListOpen(true)}
+          onNewList={() => { setNewListFolderId(null); setNewListOpen(true); }}
           menuDaLista={canEdit ? menuDaLista : null}
+          pastas={pastas}
           onViewMap={showMap}
           seletor={canEdit ? <Dropdown valor={tab === 'wish' ? 'wish' : 'lists'} opcoes={[{ valor: 'lists', rotulo: 'Minhas listas' }, { valor: 'wish', rotulo: 'Quero ir' }]} onEscolher={setTab} /> : null}
           variant="overlay"
@@ -627,7 +710,8 @@ export default function App() {
           places={places.filter(p => (p.list_ids || []).includes(openList.id))}
           todasListas={lists}
           origem={origem}
-          onBack={() => setOpenListId(null)}
+          voltarRotulo={backLabel}
+          onBack={backFromList}
           onOpen={goToPlace}
           onRemove={removePlace}
           onRemoveFromList={removePlaceFromList}
@@ -653,7 +737,7 @@ export default function App() {
           {[['map', 'Mapa'], ['lists', 'Listas']].map(([k, lb]) => {
             const ativa = k === 'map' ? tab === 'map' : tab !== 'map';
             return (
-              <Button key={k} onClick={() => { if (k === 'map') { showMap(); return; } setTab(k); setOpenListId(null); }} variant={ativa ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
+              <Button key={k} onClick={() => { if (k === 'map') { showMap(); return; } if (tab === 'lists' && !openList) setOpenFolderId(null); setTab(k); setOpenListId(null); }} variant={ativa ? 'primary' : 'ghost'} size="md" className="!px-7 !shadow-none">{lb}</Button>
             );
           })}
         </div>
@@ -787,7 +871,8 @@ export default function App() {
             places={places.filter(p => (p.list_ids || []).includes(openList.id))}
             todasListas={lists}
             origem={origem}
-            onBack={() => setOpenListId(null)}
+            voltarRotulo={backLabel}
+            onBack={backFromList}
             onOpen={goToPlace}
             onRemove={removePlace}
             onRemoveFromList={removePlaceFromList}
@@ -813,8 +898,9 @@ export default function App() {
             places={places}
             canEdit={canEdit}
             onOpenList={setOpenListId}
-            onNewList={() => setNewListOpen(true)}
+            onNewList={() => { setNewListFolderId(null); setNewListOpen(true); }}
             menuDaLista={canEdit ? menuDaLista : null}
+            pastas={pastas}
             variant="panel"
             wide={widePanel}
           />
@@ -828,7 +914,7 @@ export default function App() {
           setDraft={setDraft}
           lists={lists}
           saving={saving}
-          onNewList={() => { setPendingListPick(true); setNewListOpen(true); }}
+          onNewList={() => { setNewListFolderId(null); setPendingListPick(true); setNewListOpen(true); }}
           onCancel={descartarDraft}
           onSave={() => savePlace(draft)}
         />
@@ -849,6 +935,25 @@ export default function App() {
           creating={creatingList}
           onCancel={() => { setNewListOpen(false); setPendingListPick(false); }}
           onCreate={addList}
+        />
+      )}
+
+      {folderSheet && (
+        <FolderSheet
+          folder={folderSheet.folder || null}
+          dentroDe={folderSheet.parentId ? tree.byId.get(folderSheet.parentId)?.name : null}
+          onCancel={() => setFolderSheet(null)}
+          onSave={saveFolder}
+        />
+      )}
+
+      {pickingFolder && (
+        <FolderListsSheet
+          folder={pickingFolder}
+          lists={lists}
+          tree={tree}
+          onCancel={() => setPickingFolderId(null)}
+          onSave={saveFolderLists}
         />
       )}
 

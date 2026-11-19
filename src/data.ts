@@ -59,8 +59,11 @@ async function fetchPlacesByListId(listId) {
   return withCachedPhotoUrls(data.map(shapePlace));
 }
 
-async function createList({ name, icon, color }) {
-  const { data, error } = await client.from('lists').insert({ name, icon, color }).select().single();
+async function createList({ name, icon, color, folder_id = null }) {
+  // folder_id only goes out when set, so creating a list works before the folders migration.
+  const row: Record<string, unknown> = { name, icon, color };
+  if (folder_id) row.folder_id = folder_id;
+  const { data, error } = await client.from('lists').insert(row).select().single();
   if (error) throw error;
   return data;
 }
@@ -89,6 +92,42 @@ async function deleteList(id) {
     if (delError) throw delError;
   }
   return orfaos;
+}
+
+async function moveListsToFolder(ids, folderId) {
+  const { error } = await client.from('lists').update({ folder_id: folderId }).in('id', ids);
+  if (error) throw error;
+}
+
+// Folders are the owner's own organization: a visitor neither reads nor needs them.
+async function fetchFolders() {
+  if (!(await isOwner())) return [];
+  const { data, error } = await client.from('list_folders').select('*').order('created_at');
+  if (error) throw error;
+  return data;
+}
+
+async function createFolder({ name, parent_id = null }) {
+  const { data, error } = await client.from('list_folders').insert({ name, parent_id }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateFolder(id, patch) {
+  const { data, error } = await client.from('list_folders').update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// What was inside goes up to the folder's own parent first; no list is deleted.
+async function deleteFolder(folder) {
+  const parent = folder.parent_id || null;
+  const { error: listsError } = await client.from('lists').update({ folder_id: parent }).eq('folder_id', folder.id);
+  if (listsError) throw listsError;
+  const { error: foldersError } = await client.from('list_folders').update({ parent_id: parent }).eq('parent_id', folder.id);
+  if (foldersError) throw foldersError;
+  const { error } = await client.from('list_folders').delete().eq('id', folder.id);
+  if (error) throw error;
 }
 
 async function createPlace({ name, address, latitude, longitude, category, rating, description, avg_price, instagram, list_ids }) {
@@ -395,6 +434,11 @@ export {
   createList,
   updateList,
   deleteList,
+  moveListsToFolder,
+  fetchFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
   createPlace,
   updatePlace,
   deletePlace,

@@ -7,7 +7,7 @@ export function AddButton({
   className = '',
 }: {
   rotulo: string;
-  onClick?: () => void;
+  onClick?: (ev: React.MouseEvent<HTMLButtonElement>) => void;
   className?: string;
 }) {
   return (

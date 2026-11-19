@@ -34,6 +34,7 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
   const [places, setPlacesRaw] = useState(snapshot?.places ?? []);
   const [home, setHomeRaw] = useState(snapshot?.home ?? null);
   const [wishes, setWishesRaw] = useState(snapshot?.wishes ?? []);
+  const [folders, setFoldersRaw] = useState(snapshot?.folders ?? []);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [loadId, setLoadId] = useState(snapshot ? 1 : 0);
@@ -44,12 +45,12 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
   const confirmedKey = useRef(null);
   const loading = useRef(false);
   const lastLoadAt = useRef(0);
-  const saved = useRef({ lists, places, home, wishes });
+  const saved = useRef({ lists, places, home, wishes, folders });
   const placesNow = useRef(places);
   placesNow.current = places;
 
   // Local changes bump these, so a load that started before them doesn't undo them.
-  const edits = useRef({ lists: 0, places: 0, home: 0, wishes: 0 });
+  const edits = useRef({ lists: 0, places: 0, home: 0, wishes: 0, folders: 0 });
   const [setters] = useState(() => {
     const tracked = (slice, set) => (value) => { edits.current[slice] += 1; set(value); };
     return {
@@ -57,9 +58,10 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
       setPlaces: tracked('places', setPlacesRaw),
       setHome: tracked('home', setHomeRaw),
       setWishes: tracked('wishes', setWishesRaw),
+      setFolders: tracked('folders', setFoldersRaw),
     };
   });
-  const { setLists, setPlaces, setHome, setWishes } = setters;
+  const { setLists, setPlaces, setHome, setWishes, setFolders } = setters;
 
   useEffect(() => {
     if (!authReady) return;
@@ -73,6 +75,7 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
         setPlacesRaw(cached?.places ?? []);
         setHomeRaw(cached?.home ?? null);
         setWishesRaw(cached?.wishes ?? []);
+        setFoldersRaw(cached?.folders ?? []);
         shownKey.current = cached ? cacheKey : null;
         shownUserId.current = cached ? userId : null;
         if (cached) setLoadId(n => n + 1);
@@ -87,15 +90,25 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
       ? Promise.all([
           data.fetchListById(sharedListId).then(l => (l ? [l] : [])),
           data.fetchPlacesByListId(sharedListId),
+          [],
         ])
-      : Promise.all([data.fetchLists(), data.fetchPlaces()]);
+      : Promise.all([
+          data.fetchLists(),
+          data.fetchPlaces(),
+          // Without folders the lists still show, just not grouped (e.g. before the migration).
+          data.fetchFolders().catch(e => {
+            console.error('[Mipas] não deu pra carregar as pastas:', e);
+            return null;
+          }),
+        ]);
 
     loadPromise
-      .then(([ls, ps]) => {
+      .then(([ls, ps, fs]) => {
         if (cancelled) return;
         const fresh = shownKey.current !== cacheKey;
         if (fresh || unchanged('lists')) setListsRaw(prev => (fresh ? ls : reconcile(prev, ls)));
         if (fresh || unchanged('places')) setPlacesRaw(prev => (fresh ? ps : reconcile(prev, ps)));
+        if (fs && (fresh || unchanged('folders'))) setFoldersRaw(prev => (fresh ? fs : reconcile(prev, fs)));
         if (fresh) setLoadId(n => n + 1);
         shownKey.current = cacheKey;
         shownUserId.current = userId;
@@ -159,13 +172,13 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
   useEffect(() => {
     if (shownKey.current !== cacheKey) return;
     const last = saved.current;
-    if (last.lists === lists && last.places === places && last.home === home && last.wishes === wishes) return;
+    if (last.lists === lists && last.places === places && last.home === home && last.wishes === wishes && last.folders === folders) return;
     const timer = setTimeout(() => {
-      saved.current = { lists, places, home, wishes };
-      writeSnapshot(cacheKey, userId, { lists, places, home, wishes });
+      saved.current = { lists, places, home, wishes, folders };
+      writeSnapshot(cacheKey, userId, { lists, places, home, wishes, folders });
     }, 300);
     return () => clearTimeout(timer);
-  }, [cacheKey, lists, places, home, wishes]);
+  }, [cacheKey, lists, places, home, wishes, folders]);
 
   const setListColor = async (list, color) => {
     if (color === list.color) return;
@@ -176,6 +189,79 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
     } catch (e) {
       setLists(ls => ls.map(l => (l.id === list.id ? { ...l, color: antes } : l)));
       fail('Não deu pra mudar a cor da lista', e);
+    }
+  };
+
+  const createFolder = async ({ name, parent_id = null }) => {
+    try {
+      const created = await data.createFolder({ name, parent_id });
+      setFolders(fs => [...fs, created]);
+      return created;
+    } catch (e) {
+      fail('Não deu pra criar a pasta', e);
+      return null;
+    }
+  };
+
+  const renameFolder = async (folder, name) => {
+    try {
+      const updated = await data.updateFolder(folder.id, { name });
+      setFolders(fs => fs.map(f => (f.id === updated.id ? updated : f)));
+      return true;
+    } catch (e) {
+      fail('Não deu pra renomear a pasta', e);
+      return false;
+    }
+  };
+
+  const moveFolder = async (folder, parentId) => {
+    if ((folder.parent_id || null) === (parentId || null)) return;
+    const before = folder.parent_id;
+    setFolders(fs => fs.map(f => (f.id === folder.id ? { ...f, parent_id: parentId } : f)));
+    try {
+      await data.updateFolder(folder.id, { parent_id: parentId });
+    } catch (e) {
+      setFolders(fs => fs.map(f => (f.id === folder.id ? { ...f, parent_id: before } : f)));
+      fail('Não deu pra mover a pasta', e);
+    }
+  };
+
+  const moveListsToFolder = async (ids, folderId) => {
+    const moving = lists.filter(l => ids.includes(l.id) && (l.folder_id || null) !== (folderId || null));
+    if (moving.length === 0) return;
+    const before = new Map(moving.map(l => [l.id, l.folder_id ?? null]));
+    setLists(ls => ls.map(l => (before.has(l.id) ? { ...l, folder_id: folderId } : l)));
+    try {
+      await data.moveListsToFolder([...before.keys()], folderId);
+    } catch (e) {
+      setLists(ls => ls.map(l => (before.has(l.id) ? { ...l, folder_id: before.get(l.id) } : l)));
+      fail(moving.length === 1 ? 'Não deu pra mover a lista' : 'Não deu pra mover as listas', e);
+    }
+  };
+
+  // Nothing inside is deleted: lists and folders go up to where this folder was.
+  const deleteFolder = async (folder, { lists: nLists, folders: nFolders }) => {
+    const parent = folder.parent_id || null;
+    const parentName = parent ? folders.find(f => f.id === parent)?.name : null;
+    const contents = [
+      nFolders && `${nFolders} ${nFolders === 1 ? 'pasta' : 'pastas'}`,
+      nLists && `${nLists} ${nLists === 1 ? 'lista' : 'listas'}`,
+    ].filter(Boolean).join(' e ');
+    const where = parentName ? `"${parentName}"` : 'Minhas listas';
+    const note = contents
+      ? `\n\nNenhuma lista é apagada: ${contents} ${nLists + nFolders === 1 ? 'vai' : 'vão'} pra ${where}.`
+      : '';
+    if (!confirm(`Excluir a pasta "${folder.name}"?${note}`)) return false;
+    try {
+      await data.deleteFolder(folder);
+      setLists(ls => ls.map(l => (l.folder_id === folder.id ? { ...l, folder_id: parent } : l)));
+      setFolders(fs => fs
+        .filter(f => f.id !== folder.id)
+        .map(f => (f.parent_id === folder.id ? { ...f, parent_id: parent } : f)));
+      return true;
+    } catch (e) {
+      fail('Não deu pra excluir a pasta', e);
+      return false;
     }
   };
 
@@ -353,7 +439,9 @@ export function useMipasData({ sharedMode, sharedListId, authReady, session, can
     lists, setLists,
     places, setPlaces,
     home, wishes, setWishes,
+    folders,
     loadingData, loadError, loadId,
+    createFolder, renameFolder, moveFolder, moveListsToFolder, deleteFolder,
     setListColor, removePlaceFromList, shareList, sharePlace, unsharePlace, savePlaceEdits,
     addPhoto, reorderPhotos, removePhoto, setCoverPhoto,
     removeWish, saveHome, removeHome,
